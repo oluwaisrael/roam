@@ -32,12 +32,18 @@ type Result = {
   match_reasons: string[];
   tradeoffs: string[];
   tags: string[];
+  data_source: string;
 };
 
 type SearchResponse = {
   search_id: string;
   intent: Intent;
   results: Result[];
+};
+
+type UserLocation = {
+  lat: number;
+  lng: number;
 };
 
 const examples = [
@@ -50,10 +56,12 @@ const examples = [
 function App() {
   const [query, setQuery] = React.useState(examples[0]);
   const [data, setData] = React.useState<SearchResponse | null>(null);
+  const [userLocation, setUserLocation] = React.useState<UserLocation | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const searchLocation = userLocation ?? { lat: 6.52, lng: 3.37 };
 
-  async function runSearch(nextQuery = query) {
+  async function runSearch(nextQuery = query, location = searchLocation) {
     setLoading(true);
     setError(null);
     try {
@@ -62,7 +70,7 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query: nextQuery,
-          location: { lat: 6.52, lng: 3.37 },
+          location,
         }),
       });
       if (!response.ok) throw new Error("Roam could not complete that search.");
@@ -97,6 +105,25 @@ function App() {
     runSearch(examples[0]);
   }, []);
 
+  function useCurrentLocation() {
+    if (!navigator.geolocation) {
+      setError("Location is not available in this browser.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const nextLocation = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        setUserLocation(nextLocation);
+        runSearch(query, nextLocation);
+      },
+      () => setError("Roam could not access your location."),
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
+    );
+  }
+
   return (
     <main className="shell">
       <section className="search-panel" aria-label="Roam search">
@@ -117,6 +144,9 @@ function App() {
         >
           <Search size={21} aria-hidden="true" />
           <input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search places" />
+          <button type="button" className={userLocation ? "located" : ""} onClick={useCurrentLocation} aria-label="Use current location">
+            <LocateFixed size={18} />
+          </button>
           <button type="submit" disabled={loading}>
             <ArrowUpRight size={18} />
           </button>
@@ -213,7 +243,7 @@ function PlaceCard({ result, index }: { result: Result; index: number }) {
       </div>
       <div className="place-main">
         <div>
-          <p className="meta">{result.category} • {result.area}</p>
+          <p className="meta">{result.category} • {result.area} • {result.data_source}</p>
           <h3>{result.name}</h3>
         </div>
         <div className="place-facts">

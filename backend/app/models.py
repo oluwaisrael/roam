@@ -65,6 +65,7 @@ class Place(BaseModel):
     date_friendly: int
     family_friendly: int
     tags: list[str]
+    data_source: str = "seed"
 
 
 class SearchRequest(BaseModel):
@@ -92,6 +93,7 @@ class Result(BaseModel):
     match_reasons: list[str]
     tradeoffs: list[str]
     tags: list[str]
+    data_source: str = "seed"
 
 
 class SearchResponse(BaseModel):

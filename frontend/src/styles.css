@@ -93,7 +93,7 @@ h1 {
 
 .search-box {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr auto auto;
   align-items: center;
   gap: 14px;
   max-width: 900px;
@@ -124,6 +124,10 @@ h1 {
   border-radius: 6px;
   color: #fffdf8;
   background: #18201d;
+}
+
+.search-box button.located {
+  background: #d85c36;
 }
 
 .examples {

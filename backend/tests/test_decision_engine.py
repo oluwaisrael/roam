@@ -1,4 +1,5 @@
 from app.models import Activity, Location
+from app.providers import _place_from_element
 from app.query_parser import parse_query
 from app.scoring import score_places
 from app.seed_data import PLACES
@@ -30,3 +31,27 @@ def test_date_query_surfaces_ambience_and_tradeoffs():
     assert any(result.name in {"Art Cafe", "The Bistro", "Yellow Chilli"} for result in results[:3])
     assert results[0].match_reasons
     assert results[0].tradeoffs
+
+
+def test_osm_element_normalizes_to_place():
+    place = _place_from_element(
+        {
+            "type": "node",
+            "id": 123,
+            "lat": 6.45,
+            "lon": 3.39,
+            "tags": {
+                "name": "Real Cafe",
+                "amenity": "cafe",
+                "internet_access": "wlan",
+                "addr:suburb": "Ikoyi",
+            },
+        }
+    )
+
+    assert place is not None
+    assert place.name == "Real Cafe"
+    assert place.category == "Cafe"
+    assert place.area == "Ikoyi"
+    assert place.wifi == 4
+    assert place.data_source == "OpenStreetMap"

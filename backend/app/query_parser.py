@@ -18,7 +18,7 @@ def parse_query(query: str) -> Intent:
         intent.activity = Activity.read
     elif any(word in text for word in ["eat", "food", "restaurant", "brunch", "dinner", "lunch"]):
         intent.activity = Activity.eat
-    elif any(word in text for word in ["quick", "closest", "nearby", "coffee near"]):
+    elif any(word in text for word in ["quick", "closest", "nearby", "coffee", "cafe", "café"]):
         intent.activity = Activity.quick_stop
     elif any(word in text for word in ["unwind", "lounge", "drink", "music"]):
         intent.activity = Activity.unwind
@@ -64,7 +64,7 @@ def _parse_budget(text: str) -> int | None:
 
 def _significant_terms(text: str) -> list[str]:
     terms = []
-    for term in ["quiet", "wifi", "wi-fi", "power", "date", "work", "read", "cheap", "open now", "romantic"]:
+    for term in ["quiet", "wifi", "wi-fi", "power", "date", "work", "read", "cheap", "open now", "romantic", "cafe", "café", "coffee", "restaurant"]:
         if term in text:
-            terms.append(term.replace("wi-fi", "wifi"))
+            terms.append(term.replace("wi-fi", "wifi").replace("café", "cafe"))
     return sorted(set(terms))

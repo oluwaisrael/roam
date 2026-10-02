@@ -6,7 +6,7 @@ from app.models import Activity, Intent, Location, Place, Result, distance_km
 BASE_WEIGHTS: dict[Activity, dict[str, float]] = {
     Activity.work: {"quietness": 1.4, "wifi": 1.5, "power": 1.3, "seating": 1.0, "distance": 0.8, "budget": 0.8, "quality": 0.5},
     Activity.date: {"ambience": 1.5, "food": 1.0, "date": 1.4, "distance": 0.7, "budget": 0.9, "quality": 0.7},
-    Activity.quick_stop: {"distance": 1.8, "open": 1.2, "budget": 0.9, "quality": 0.4},
+    Activity.quick_stop: {"distance": 1.8, "open": 1.2, "budget": 0.9, "quality": 0.4, "category": 3.5},
     Activity.read: {"quietness": 1.7, "seating": 1.0, "budget": 0.8, "distance": 0.8, "quality": 0.4},
     Activity.eat: {"food": 1.5, "ambience": 0.8, "budget": 0.9, "distance": 0.7, "quality": 0.8},
     Activity.unwind: {"ambience": 1.3, "food": 0.6, "distance": 0.7, "quality": 0.7, "open": 0.8},
@@ -49,6 +49,7 @@ def _score_place(place: Place, intent: Intent, origin: Location | None) -> Resul
         "open": 1 if open_now else 0,
         "budget": _budget_fit(place, intent),
         "distance": _distance_fit(travel_minutes, intent),
+        "category": _category_fit(place, intent),
     }
 
     weighted = sum(components[key] * weight for key, weight in weights.items())
@@ -77,6 +78,7 @@ def _score_place(place: Place, intent: Intent, origin: Location | None) -> Resul
         match_reasons=reasons[:4],
         tradeoffs=tradeoffs[:3],
         tags=place.tags,
+        data_source=place.data_source,
     )
 
 
@@ -96,6 +98,23 @@ def _distance_fit(minutes: int | None, intent: Intent) -> float:
     if minutes <= target:
         return 1
     return max(0, 1 - (minutes - target) / target)
+
+
+def _category_fit(place: Place, intent: Intent) -> float:
+    terms = set(intent.raw_terms)
+    if {"cafe", "coffee"} & terms:
+        if place.category == "Cafe":
+            return 1
+        if place.category in {"Quick food", "Restaurant"}:
+            return 0.35
+        return 0
+    if "restaurant" in terms:
+        if place.category == "Restaurant":
+            return 1
+        if place.category in {"Cafe", "Quick food"}:
+            return 0.35
+        return 0
+    return 0.7
 
 
 def _is_open_now(place: Place) -> bool:
