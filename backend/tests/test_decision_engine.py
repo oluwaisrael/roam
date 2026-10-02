@@ -1,6 +1,6 @@
 from app.intelligence import explain_decision
 from app.models import Activity, Location
-from app.providers import _photo_page_url, _photo_url, _place_from_element
+from app.providers import _photo_page_url, _photo_url, _place_from_element, _search_origin
 from app.query_parser import parse_query
 from app.scoring import score_places
 from app.seed_data import PLACES
@@ -15,6 +15,29 @@ def test_parse_work_query_extracts_constraints():
     assert intent.power is True
     assert intent.budget_max == 10000
     assert intent.duration_hours == 4
+    assert intent.place_types == ["cafe"]
+    assert "wifi" in intent.must_have
+    assert "power" in intent.must_have
+
+
+def test_parse_prompt_understands_area_avoid_and_priority():
+    intent = parse_query("date spot around Lekki under ₦30k, not noisy, distance matters more")
+
+    assert intent.activity == Activity.date
+    assert intent.area == "Lekki"
+    assert intent.budget_max == 30000
+    assert "noise" in intent.avoid
+    assert "distance" in intent.priority
+    assert "restaurant" in intent.place_types or "bar" in intent.place_types or intent.romantic is True
+    assert "around Lekki" in intent.interpretation
+
+
+def test_named_area_changes_provider_search_origin():
+    intent = parse_query("date spot around Lekki under ₦30k")
+    origin = _search_origin(intent, Location(lat=6.52, lng=3.37))
+
+    assert round(origin.lat, 3) == 6.470
+    assert round(origin.lng, 3) == 3.585
 
 
 def test_work_query_prefers_work_friendly_places():

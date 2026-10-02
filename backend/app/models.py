@@ -29,6 +29,8 @@ class Location(BaseModel):
 
 class Intent(BaseModel):
     activity: Activity = Activity.general
+    place_types: list[str] = Field(default_factory=list)
+    area: str | None = None
     budget_max: int | None = None
     duration_hours: float | None = None
     max_minutes: int | None = None
@@ -38,6 +40,10 @@ class Intent(BaseModel):
     open_now: bool = False
     romantic: bool = False
     cheap: bool = False
+    must_have: list[str] = Field(default_factory=list)
+    avoid: list[str] = Field(default_factory=list)
+    priority: list[str] = Field(default_factory=list)
+    interpretation: str = ""
     raw_terms: list[str] = Field(default_factory=list)
 
 

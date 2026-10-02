@@ -19,7 +19,8 @@ def explain_decision(intent: Intent, results: list[Result]) -> DecisionInsight:
     reason = _summary_reason(best)
     tradeoff = _first_real_tradeoff(best)
 
-    summary = f"{best.name} is the strongest fit for {activity_label} because {reason}."
+    understood = f" I understood this as: {intent.interpretation}." if intent.interpretation else ""
+    summary = f"{best.name} is the strongest fit for {activity_label} because {reason}.{understood}"
     if second:
         gap = best.score - second.score
         if gap <= 6:

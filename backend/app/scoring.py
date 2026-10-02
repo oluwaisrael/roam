@@ -32,6 +32,19 @@ def _score_place(place: Place, intent: Intent, origin: Location | None) -> Resul
         weights["ambience"] = weights.get("ambience", 0) + 0.8
     if intent.open_now:
         weights["open"] = weights.get("open", 0) + 1.0
+    for priority in intent.priority:
+        if priority == "distance":
+            weights["distance"] = weights.get("distance", 0) + 1.0
+        elif priority == "budget":
+            weights["budget"] = weights.get("budget", 0) + 1.0
+        elif priority == "quiet":
+            weights["quietness"] = weights.get("quietness", 0) + 1.0
+        elif priority == "wifi":
+            weights["wifi"] = weights.get("wifi", 0) + 1.0
+        elif priority == "ambience":
+            weights["ambience"] = weights.get("ambience", 0) + 1.0
+        elif priority == "food":
+            weights["food"] = weights.get("food", 0) + 1.0
 
     distance = distance_km(origin, place.location) if origin else None
     travel_minutes = round(distance / 24 * 60) if distance is not None else None
@@ -58,6 +71,14 @@ def _score_place(place: Place, intent: Intent, origin: Location | None) -> Resul
     if intent.budget_max and place.typical_spend > intent.budget_max:
         overage = (place.typical_spend - intent.budget_max) / max(intent.budget_max, 1)
         score -= round(min(28, overage * 40))
+    if "noise" in intent.avoid and place.quietness <= 2:
+        score -= 18
+    if "crowd" in intent.avoid and place.category in {"Bar", "Quick food"}:
+        score -= 10
+    if "far" in intent.avoid and travel_minutes is not None and travel_minutes > (intent.max_minutes or 20):
+        score -= 14
+    if "expensive" in intent.avoid and place.price_level >= 3:
+        score -= 12
     score = max(0, min(100, score))
 
     reasons = _match_reasons(place, intent, travel_minutes, open_now)
@@ -165,8 +186,12 @@ def _tradeoffs(place: Place, intent: Intent, travel_minutes: int | None, open_no
         tradeoffs.append("Power access may be limited")
     if travel_minutes is not None and intent.max_minutes and travel_minutes > intent.max_minutes:
         tradeoffs.append(f"{travel_minutes} min away, beyond your target")
+    elif "far" in intent.avoid and travel_minutes is not None and travel_minutes > 20:
+        tradeoffs.append(f"{travel_minutes} min away, which may feel far")
     if intent.open_now and not open_now:
         tradeoffs.append("Not open right now")
+    if "expensive" in intent.avoid and place.price_level >= 3:
+        tradeoffs.append("May feel pricey for this request")
     if not tradeoffs:
         tradeoffs.append("No major tradeoff for this request")
     return tradeoffs

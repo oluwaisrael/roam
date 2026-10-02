@@ -5,6 +5,8 @@ import "./styles.css";
 
 type Intent = {
   activity: string;
+  place_types: string[];
+  area: string | null;
   budget_max: number | null;
   duration_hours: number | null;
   max_minutes: number | null;
@@ -14,6 +16,10 @@ type Intent = {
   open_now: boolean;
   romantic: boolean;
   cheap: boolean;
+  must_have: string[];
+  avoid: string[];
+  priority: string[];
+  interpretation: string;
   raw_terms: string[];
 };
 
@@ -228,6 +234,8 @@ function App() {
 function IntentPills({ intent }: { intent: Intent }) {
   const pills = [
     intent.activity.replace("_", " "),
+    intent.place_types.length ? intent.place_types.join(" / ") : null,
+    intent.area ? `around ${intent.area}` : null,
     intent.budget_max ? `₦${intent.budget_max.toLocaleString()} max` : null,
     intent.duration_hours ? `${intent.duration_hours} hrs` : null,
     intent.max_minutes ? `within ${intent.max_minutes} min` : null,
@@ -236,14 +244,19 @@ function IntentPills({ intent }: { intent: Intent }) {
     intent.power ? "power" : null,
     intent.romantic ? "romantic" : null,
     intent.open_now ? "open now" : null,
+    intent.avoid.length ? `avoid ${intent.avoid.join(", ")}` : null,
+    intent.priority.length ? `prioritize ${intent.priority.join(", ")}` : null,
   ].filter(Boolean);
 
   return (
-    <div className="pills">
-      {pills.map((pill) => (
-        <span key={pill}>{pill}</span>
-      ))}
-    </div>
+    <>
+      {intent.interpretation && <p className="interpretation">{intent.interpretation}</p>}
+      <div className="pills">
+        {pills.map((pill) => (
+          <span key={pill}>{pill}</span>
+        ))}
+      </div>
+    </>
   );
 }
 

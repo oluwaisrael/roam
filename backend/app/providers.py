@@ -9,6 +9,18 @@ from app.seed_data import PLACES
 
 
 DEFAULT_LAGOS_LOCATION = Location(lat=6.5244, lng=3.3792)
+AREA_CENTERS = {
+    "Lekki": Location(lat=6.4698, lng=3.5852),
+    "Lekki Phase 1": Location(lat=6.4474, lng=3.4723),
+    "Victoria Island": Location(lat=6.4281, lng=3.4219),
+    "Ikoyi": Location(lat=6.4549, lng=3.4246),
+    "Yaba": Location(lat=6.5166, lng=3.3869),
+    "Surulere": Location(lat=6.5000, lng=3.3500),
+    "Ikeja": Location(lat=6.6018, lng=3.3515),
+    "Lagos Island": Location(lat=6.4541, lng=3.3947),
+    "Marina": Location(lat=6.4549, lng=3.3897),
+    "Ajah": Location(lat=6.4698, lng=3.5852),
+}
 
 
 class PlaceProvider(ABC):
@@ -26,7 +38,7 @@ class OverpassPlaceProvider(PlaceProvider):
     endpoint = "https://overpass-api.de/api/interpreter"
 
     def search(self, intent: Intent, location: Location | None) -> list[Place]:
-        origin = location or DEFAULT_LAGOS_LOCATION
+        origin = _search_origin(intent, location)
         query = _build_overpass_query(intent, origin)
         payload = urlencode({"data": query}).encode()
         request = Request(
@@ -55,7 +67,7 @@ class NominatimPlaceProvider(PlaceProvider):
     endpoint = "https://nominatim.openstreetmap.org/search"
 
     def search(self, intent: Intent, location: Location | None) -> list[Place]:
-        origin = location or DEFAULT_LAGOS_LOCATION
+        origin = _search_origin(intent, location)
         search_terms = _nominatim_terms(intent)
         places: list[Place] = []
         seen_ids: set[str] = set()
@@ -129,7 +141,19 @@ def _build_overpass_query(intent: Intent, origin: Location) -> str:
     """
 
 
+def _search_origin(intent: Intent, location: Location | None) -> Location:
+    if intent.area and intent.area in AREA_CENTERS:
+        return AREA_CENTERS[intent.area]
+    return location or DEFAULT_LAGOS_LOCATION
+
+
 def _osm_filters(intent: Intent) -> list[tuple[str, str]]:
+    if intent.place_types:
+        filters: list[tuple[str, str]] = []
+        for place_type in intent.place_types:
+            filters.extend(_filters_for_place_type(place_type))
+        if filters:
+            return _dedupe_filters(filters)
     if intent.activity == Activity.work:
         return [("amenity", "cafe"), ("amenity", "library"), ("office", "coworking")]
     if intent.activity == Activity.date:
@@ -146,19 +170,38 @@ def _osm_filters(intent: Intent) -> list[tuple[str, str]]:
 
 
 def _nominatim_terms(intent: Intent) -> list[str]:
+    area = intent.area or "Lagos"
+    if intent.place_types:
+        return [f"{place_type} {area} Nigeria" for place_type in intent.place_types]
     if intent.activity == Activity.work:
-        return ["cafe Lagos Nigeria", "coworking Lagos Nigeria", "library Lagos Nigeria"]
+        return [f"cafe {area} Nigeria", f"coworking {area} Nigeria", f"library {area} Nigeria"]
     if intent.activity == Activity.date:
-        return ["restaurant Lagos Nigeria", "cafe Lagos Nigeria", "bar Lagos Nigeria"]
+        return [f"restaurant {area} Nigeria", f"cafe {area} Nigeria", f"bar {area} Nigeria"]
     if intent.activity == Activity.read:
-        return ["library Lagos Nigeria", "quiet cafe Lagos Nigeria", "park Lagos Nigeria"]
+        return [f"library {area} Nigeria", f"quiet cafe {area} Nigeria", f"park {area} Nigeria"]
     if intent.activity == Activity.eat:
-        return ["restaurant Lagos Nigeria", "cafe Lagos Nigeria", "fast food Lagos Nigeria"]
+        return [f"restaurant {area} Nigeria", f"cafe {area} Nigeria", f"fast food {area} Nigeria"]
     if intent.activity == Activity.quick_stop:
-        return ["cafe Lagos Nigeria", "coffee Lagos Nigeria", "fast food Lagos Nigeria"]
+        return [f"cafe {area} Nigeria", f"coffee {area} Nigeria", f"fast food {area} Nigeria"]
     if intent.activity == Activity.unwind:
-        return ["bar Lagos Nigeria", "park Lagos Nigeria", "restaurant Lagos Nigeria"]
-    return ["cafe Lagos Nigeria", "restaurant Lagos Nigeria", "library Lagos Nigeria"]
+        return [f"bar {area} Nigeria", f"park {area} Nigeria", f"restaurant {area} Nigeria"]
+    return [f"cafe {area} Nigeria", f"restaurant {area} Nigeria", f"library {area} Nigeria"]
+
+
+def _filters_for_place_type(place_type: str) -> list[tuple[str, str]]:
+    mapping = {
+        "cafe": [("amenity", "cafe")],
+        "restaurant": [("amenity", "restaurant"), ("amenity", "fast_food")],
+        "coworking": [("office", "coworking")],
+        "library": [("amenity", "library")],
+        "park": [("leisure", "park")],
+        "bar": [("amenity", "bar"), ("amenity", "pub")],
+    }
+    return mapping.get(place_type, [])
+
+
+def _dedupe_filters(filters: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    return list(dict.fromkeys(filters))
 
 
 def _viewbox(origin: Location) -> str:
