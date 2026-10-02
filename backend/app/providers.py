@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import json
 from urllib.error import URLError
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 from app.models import Activity, Intent, Location, Place
@@ -66,6 +66,7 @@ class NominatimPlaceProvider(PlaceProvider):
                 "format": "jsonv2",
                 "limit": "8",
                 "addressdetails": "1",
+                "extratags": "1",
                 "bounded": "1",
                 "viewbox": _viewbox(origin),
             }
@@ -211,6 +212,8 @@ def _place_from_element(element: dict) -> Place | None:
         family_friendly=heuristics["family_friendly"],
         tags=_tags(category, tags),
         data_source="OpenStreetMap",
+        photo_url=_photo_url(tags),
+        photo_page_url=_photo_page_url(tags),
     )
 
 
@@ -223,6 +226,7 @@ def _place_from_nominatim_result(item: dict) -> Place | None:
 
     place_type = item.get("type")
     tags = _tags_from_nominatim_type(place_type)
+    tags.update(item.get("extratags") or {})
     category = _category(tags)
     heuristics = _heuristics_for_category(category, tags)
     address = item.get("address", {})
@@ -254,6 +258,8 @@ def _place_from_nominatim_result(item: dict) -> Place | None:
         family_friendly=heuristics["family_friendly"],
         tags=_tags(category, tags),
         data_source="OpenStreetMap",
+        photo_url=_photo_url(tags),
+        photo_page_url=_photo_page_url(tags),
     )
 
 
@@ -339,4 +345,48 @@ def _tags(category: str, tags: dict) -> list[str]:
         values.append("work-friendly")
     if category in {"Restaurant", "Bar"}:
         values.append("date-friendly")
+    if _photo_url(tags):
+        values.append("photo")
     return values
+
+
+def _photo_url(tags: dict) -> str | None:
+    image = tags.get("image")
+    if image and image.startswith(("http://", "https://")):
+        return image
+
+    commons = tags.get("wikimedia_commons")
+    if commons:
+        filename = _commons_filename(commons)
+        if filename:
+            return f"https://commons.wikimedia.org/wiki/Special:FilePath/{quote(filename)}"
+
+    return None
+
+
+def _photo_page_url(tags: dict) -> str | None:
+    image = tags.get("image")
+    if image and image.startswith(("http://", "https://")):
+        return image
+
+    commons = tags.get("wikimedia_commons")
+    if commons:
+        if commons.startswith("Category:"):
+            return f"https://commons.wikimedia.org/wiki/{quote(commons.replace(' ', '_'), safe=':/')}"
+        filename = _commons_filename(commons)
+        if filename:
+            return f"https://commons.wikimedia.org/wiki/File:{quote(filename.replace(' ', '_'))}"
+
+    wikidata = tags.get("wikidata")
+    if wikidata:
+        return f"https://www.wikidata.org/wiki/{quote(wikidata)}"
+
+    return None
+
+
+def _commons_filename(value: str) -> str | None:
+    if value.startswith("File:"):
+        return value.removeprefix("File:")
+    if "." in value and not value.startswith("Category:"):
+        return value
+    return None

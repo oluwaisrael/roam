@@ -79,6 +79,8 @@ def _score_place(place: Place, intent: Intent, origin: Location | None) -> Resul
         tradeoffs=tradeoffs[:3],
         tags=place.tags,
         data_source=place.data_source,
+        photo_url=place.photo_url,
+        photo_page_url=place.photo_page_url,
     )
 
 

@@ -1,5 +1,6 @@
+from app.intelligence import explain_decision
 from app.models import Activity, Location
-from app.providers import _place_from_element
+from app.providers import _photo_page_url, _photo_url, _place_from_element
 from app.query_parser import parse_query
 from app.scoring import score_places
 from app.seed_data import PLACES
@@ -55,3 +56,21 @@ def test_osm_element_normalizes_to_place():
     assert place.area == "Ikoyi"
     assert place.wifi == 4
     assert place.data_source == "OpenStreetMap"
+
+
+def test_commons_photo_paths_are_extracted():
+    tags = {"wikimedia_commons": "File:Example cafe.jpg"}
+
+    assert _photo_url(tags) == "https://commons.wikimedia.org/wiki/Special:FilePath/Example%20cafe.jpg"
+    assert _photo_page_url(tags) == "https://commons.wikimedia.org/wiki/File:Example_cafe.jpg"
+
+
+def test_intelligence_explains_top_result():
+    intent = parse_query("quiet place to work under ₦10000 with wifi and power")
+    results = score_places(PLACES, intent, Location(lat=6.52, lng=3.37))[:3]
+    insight = explain_decision(intent, results)
+
+    assert results[0].name in insight.headline
+    assert insight.confidence in {"high", "medium", "low"}
+    assert insight.summary
+    assert insight.next_best_action

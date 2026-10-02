@@ -66,6 +66,8 @@ class Place(BaseModel):
     family_friendly: int
     tags: list[str]
     data_source: str = "seed"
+    photo_url: str | None = None
+    photo_page_url: str | None = None
 
 
 class SearchRequest(BaseModel):
@@ -94,11 +96,23 @@ class Result(BaseModel):
     tradeoffs: list[str]
     tags: list[str]
     data_source: str = "seed"
+    photo_url: str | None = None
+    photo_page_url: str | None = None
+
+
+class DecisionInsight(BaseModel):
+    headline: str
+    summary: str
+    confidence: Literal["high", "medium", "low"]
+    primary_tradeoff: str
+    next_best_action: str
+    caveats: list[str]
 
 
 class SearchResponse(BaseModel):
     search_id: str = Field(default_factory=lambda: uuid4().hex)
     intent: Intent
+    intelligence: DecisionInsight
     results: list[Result]
 
 

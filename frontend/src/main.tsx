@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { ArrowUpRight, Clock, LocateFixed, MapPin, Search, SlidersHorizontal, Sparkles, Wifi, Zap } from "lucide-react";
+import { ArrowUpRight, Camera, Clock, LocateFixed, MapPin, Search, SlidersHorizontal, Sparkles, Wifi, Zap } from "lucide-react";
 import "./styles.css";
 
 type Intent = {
@@ -33,11 +33,23 @@ type Result = {
   tradeoffs: string[];
   tags: string[];
   data_source: string;
+  photo_url: string | null;
+  photo_page_url: string | null;
+};
+
+type DecisionInsight = {
+  headline: string;
+  summary: string;
+  confidence: "high" | "medium" | "low";
+  primary_tradeoff: string;
+  next_best_action: string;
+  caveats: string[];
 };
 
 type SearchResponse = {
   search_id: string;
   intent: Intent;
+  intelligence: DecisionInsight;
   results: Result[];
 };
 
@@ -177,6 +189,7 @@ function App() {
               <h2>Roam understood</h2>
             </div>
             <IntentPills intent={data.intent} />
+            <InsightPanel insight={data.intelligence} />
             <div className="what-if">
               <div className="panel-heading">
                 <SlidersHorizontal size={18} />
@@ -234,6 +247,29 @@ function IntentPills({ intent }: { intent: Intent }) {
   );
 }
 
+function InsightPanel({ insight }: { insight: DecisionInsight }) {
+  return (
+    <div className="insight">
+      <p className="confidence">{insight.confidence} confidence</p>
+      <h3>{insight.headline}</h3>
+      <p>{insight.summary}</p>
+      <div className="insight-detail">
+        <strong>Tradeoff</strong>
+        <span>{insight.primary_tradeoff}</span>
+      </div>
+      <div className="insight-detail">
+        <strong>Next</strong>
+        <span>{insight.next_best_action}</span>
+      </div>
+      {insight.caveats.length > 0 && (
+        <ul className="caveats">
+          {insight.caveats.map((caveat) => <li key={caveat}>{caveat}</li>)}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function PlaceCard({ result, index }: { result: Result; index: number }) {
   return (
     <article className={index === 0 ? "place-card featured" : "place-card"}>
@@ -242,6 +278,7 @@ function PlaceCard({ result, index }: { result: Result; index: number }) {
         <span>match</span>
       </div>
       <div className="place-main">
+        <PlacePhoto result={result} />
         <div>
           <p className="meta">{result.category} • {result.area} • {result.data_source}</p>
           <h3>{result.name}</h3>
@@ -268,6 +305,32 @@ function PlaceCard({ result, index }: { result: Result; index: number }) {
         </div>
       </div>
     </article>
+  );
+}
+
+function PlacePhoto({ result }: { result: Result }) {
+  if (result.photo_url) {
+    return (
+      <a className="place-photo" href={result.photo_page_url ?? result.photo_url} target="_blank" rel="noreferrer" aria-label={`Open picture source for ${result.name}`}>
+        <img src={result.photo_url} alt={result.name} loading="lazy" />
+      </a>
+    );
+  }
+
+  if (result.photo_page_url) {
+    return (
+      <a className="photo-link" href={result.photo_page_url} target="_blank" rel="noreferrer">
+        <Camera size={16} />
+        Picture source
+      </a>
+    );
+  }
+
+  return (
+    <div className="photo-empty">
+      <Camera size={16} />
+      No verified picture yet
+    </div>
   );
 }
 
