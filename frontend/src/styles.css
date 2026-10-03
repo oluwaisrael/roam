@@ -264,6 +264,17 @@ h1 {
   padding-left: 16px;
 }
 
+.suggestions {
+  display: grid;
+  gap: 6px;
+}
+
+.suggestions span {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(255, 253, 248, 0.1);
+}
+
 .what-if button {
   width: 100%;
   border-radius: 7px;
@@ -399,6 +410,32 @@ h1 {
   grid-template-columns: 1.15fr 0.85fr;
   gap: 16px;
   margin-top: 18px;
+}
+
+.evidence-row,
+.place-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.evidence-row span,
+.place-actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  color: #26312d;
+  background: #f4f1e8;
+  font-size: 0.82rem;
+  text-decoration: none;
+}
+
+.evidence-row strong {
+  color: #66736c;
 }
 
 .reasoning h4 {

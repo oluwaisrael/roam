@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { ArrowUpRight, Camera, Clock, LocateFixed, MapPin, Search, SlidersHorizontal, Sparkles, Wifi, Zap } from "lucide-react";
+import { ArrowUpRight, Camera, Clock, ExternalLink, LocateFixed, MapPin, Search, SlidersHorizontal, Sparkles, Wifi, Zap } from "lucide-react";
 import "./styles.css";
 
 type Intent = {
@@ -41,6 +41,15 @@ type Result = {
   data_source: string;
   photo_url: string | null;
   photo_page_url: string | null;
+  maps_url: string;
+  photos_url: string;
+  evidence: Evidence[];
+};
+
+type Evidence = {
+  label: string;
+  value: string;
+  status: "listed" | "estimated" | "unknown" | "demo";
 };
 
 type DecisionInsight = {
@@ -57,6 +66,11 @@ type SearchResponse = {
   intent: Intent;
   intelligence: DecisionInsight;
   results: Result[];
+  engine: "ai" | "rules";
+  engine_status: string;
+  suggestions: string[];
+  clarification: string | null;
+  data_status: "live" | "demo" | "unavailable";
 };
 
 type UserLocation = {
@@ -195,7 +209,7 @@ function App() {
               <h2>Roam understood</h2>
             </div>
             <IntentPills intent={data.intent} />
-            <InsightPanel insight={data.intelligence} />
+            <InsightPanel insight={data.intelligence} data={data} />
             <div className="what-if">
               <div className="panel-heading">
                 <SlidersHorizontal size={18} />
@@ -260,12 +274,18 @@ function IntentPills({ intent }: { intent: Intent }) {
   );
 }
 
-function InsightPanel({ insight }: { insight: DecisionInsight }) {
+function InsightPanel({ insight, data }: { insight: DecisionInsight; data: SearchResponse }) {
   return (
     <div className="insight">
-      <p className="confidence">{insight.confidence} confidence</p>
+      <p className="confidence">{insight.confidence} confidence • {data.engine_status}</p>
       <h3>{insight.headline}</h3>
       <p>{insight.summary}</p>
+      {data.clarification && (
+        <div className="insight-detail">
+          <strong>Clarify</strong>
+          <span>{data.clarification}</span>
+        </div>
+      )}
       <div className="insight-detail">
         <strong>Tradeoff</strong>
         <span>{insight.primary_tradeoff}</span>
@@ -278,6 +298,11 @@ function InsightPanel({ insight }: { insight: DecisionInsight }) {
         <ul className="caveats">
           {insight.caveats.map((caveat) => <li key={caveat}>{caveat}</li>)}
         </ul>
+      )}
+      {data.suggestions.length > 0 && (
+        <div className="suggestions">
+          {data.suggestions.map((suggestion) => <span key={suggestion}>{suggestion}</span>)}
+        </div>
       )}
     </div>
   );
@@ -315,6 +340,18 @@ function PlaceCard({ result, index }: { result: Result; index: number }) {
               {result.tradeoffs.map((tradeoff) => <li key={tradeoff}>{tradeoff}</li>)}
             </ul>
           </div>
+        </div>
+        <div className="evidence-row">
+          {result.evidence.slice(0, 4).map((item) => (
+            <span key={`${result.place_id}-${item.label}`}>
+              <strong>{item.label}</strong>
+              {item.value}
+            </span>
+          ))}
+        </div>
+        <div className="place-actions">
+          <a href={result.maps_url} target="_blank" rel="noreferrer"><MapPin size={15} />Map</a>
+          <a href={result.photos_url} target="_blank" rel="noreferrer"><ExternalLink size={15} />Photos</a>
         </div>
       </div>
     </article>
