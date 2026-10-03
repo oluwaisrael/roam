@@ -30,7 +30,7 @@ REQUIREMENT_KEYWORDS = {
     "quiet": {"quiet", "peaceful", "calm", "not noisy", "focus", "read"},
     "wifi": {"wifi", "wi-fi", "internet"},
     "power": {"power", "charging", "socket", "outlet", "plug"},
-    "open_now": {"open now", "tonight", "right now"},
+    "open_now": {"open now", "right now", "currently open", "open currently"},
     "romantic": {"romantic", "date", "take someone", "intimate"},
     "cheap": {"cheap", "affordable", "budget", "low cost"},
     "parking": {"parking", "park my car"},

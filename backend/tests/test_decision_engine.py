@@ -44,6 +44,14 @@ def test_parse_prompt_understands_area_avoid_and_priority():
     assert "around Lekki" in intent.interpretation
 
 
+def test_tonight_does_not_mean_open_now():
+    intent = parse_query("romantic date spot tonight around VI")
+
+    assert intent.activity == Activity.date
+    assert intent.romantic is True
+    assert intent.open_now is False
+
+
 def test_followup_can_remove_budget_without_losing_context():
     previous = parse_query("quiet cafe in Yaba under ₦10k with wifi")
     intent = parse_followup("remove budget", previous)
