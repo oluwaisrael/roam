@@ -1,6 +1,7 @@
+from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime
-from collections import OrderedDict
+import os
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException
@@ -8,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from app.intelligence import explain_decision
-from app.models import Intent, Location, RefineRequest, Result, SearchRequest, SearchResponse
+from app.models import Activity, Intent, Location, RefineRequest, Result, SearchRequest, SearchResponse
 from app.providers import CompositePlaceProvider, NominatimPlaceProvider, OverpassPlaceProvider, SeedPlaceProvider
 from app.query_parser import normalize_intent
 from app.scoring import score_places
@@ -40,7 +41,12 @@ LAGOS_TIMEZONE = ZoneInfo("Africa/Lagos")
 
 @app.get("/api/health")
 def health() -> dict[str, str]:
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "version": app.version,
+        "ai_provider": os.getenv("ROAM_AI_PROVIDER", "openai" if os.getenv("OPENAI_API_KEY") else "rules"),
+        "demo_data": os.getenv("ROAM_DEMO_DATA", "false").lower(),
+    }
 
 
 @app.post("/api/search", response_model=SearchResponse)
@@ -116,7 +122,7 @@ def _suggestions(intent: Intent, results: list[Result]) -> list[str]:
         suggestions.append("Set a travel limit, e.g. within 15 minutes")
     if not intent.area and not results:
         suggestions.append("Name an area like Yaba, Ikoyi, VI, or Lekki")
-    if intent.activity == "work" and not intent.power:
+    if intent.activity == Activity.work and not intent.power:
         suggestions.append("Say if power sockets matter")
     if results and any(result.data_source != "seed" for result in results):
         suggestions.append("Open the map or photo links to confirm live details")

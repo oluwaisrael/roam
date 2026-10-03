@@ -143,6 +143,21 @@ def test_search_endpoint_returns_decision_metadata(monkeypatch):
     assert body["results"][0]["evidence"]
 
 
+def test_health_endpoint_exposes_safe_runtime_status(monkeypatch):
+    monkeypatch.setenv("ROAM_AI_PROVIDER", "rules")
+    client = TestClient(main.app)
+
+    response = client.get("/api/health")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ok",
+        "version": "0.1.0",
+        "ai_provider": "rules",
+        "demo_data": "false",
+    }
+
+
 def test_refine_endpoint_accepts_followup_query(monkeypatch):
     monkeypatch.setattr(main, "PLACE_PROVIDER", StaticProvider())
     client = TestClient(main.app)
