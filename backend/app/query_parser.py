@@ -97,8 +97,54 @@ def parse_query(query: str) -> Intent:
         _append_unique(intent.must_have, ["power"] if intent.power else [])
         _append_unique(intent.must_have, ["quiet"] if intent.quiet else [])
 
+    return normalize_intent(intent, text)
+
+
+def normalize_intent(intent: Intent, text: str = "") -> Intent:
+    text = _normalize(text).replace("’", "'")
+    for key, words in REQUIREMENT_KEYWORDS.items():
+        if not hasattr(intent, key):
+            continue
+        for word in words:
+            if re.search(rf"(?:don't need|do not need|don't care about|without|no|ignore)\s+(?:the\s+)?{re.escape(word)}\b|{re.escape(word)}\s+(?:doesn't matter|does not matter|is optional|isn't necessary)", text):
+                setattr(intent, key, False)
+                if key in intent.priority:
+                    intent.priority.remove(key)
+    intent.must_have = [key for key in ("quiet", "wifi", "power", "open_now", "romantic") if getattr(intent, key)]
+    if not intent.quiet:
+        intent.avoid = [item for item in intent.avoid if item != "noise"]
     intent.interpretation = _interpretation(intent)
     return intent
+
+
+def parse_followup(query: str, previous: Intent) -> Intent:
+    parsed = parse_query(query)
+    text = _normalize(query).replace("’", "'")
+    changes = {}
+    for key in ("area", "budget_max", "duration_hours", "max_minutes"):
+        if getattr(parsed, key) is not None:
+            changes[key] = getattr(parsed, key)
+    if parsed.place_types:
+        changes["place_types"] = parsed.place_types
+    if parsed.activity != Activity.general:
+        changes["activity"] = parsed.activity
+    for key in ("quiet", "wifi", "power", "open_now", "romantic", "cheap"):
+        if getattr(parsed, key):
+            changes[key] = True
+    for key in ("priority", "avoid"):
+        changes[key] = list(dict.fromkeys(getattr(parsed, key) + getattr(previous, key)))
+    if "cheaper" in text:
+        changes["budget_max"] = max(0, round((previous.budget_max or 15000) * 0.75))
+        changes["priority"] = ["budget"]
+    if any(word in text for word in ("closer", "nearer", "distance matters")):
+        changes["priority"] = ["distance"]
+        changes["max_minutes"] = parsed.max_minutes or 15
+    if any(word in text for word in ("quieter", "less noisy")):
+        changes.update(quiet=True, priority=["quiet"])
+    if any(word in text for word in ("no budget limit", "remove budget", "budget doesn't matter")):
+        changes.update(budget_max=None, cheap=False)
+        changes["priority"] = [item for item in changes["priority"] if item != "budget"]
+    return normalize_intent(Intent.model_validate({**previous.model_dump(), **changes}), text)
 
 
 def _normalize(query: str) -> str:
@@ -163,15 +209,13 @@ def _extract_avoid(text: str) -> list[str]:
 
 
 def _parse_budget(text: str) -> int | None:
-    budget_context = re.search(r"(?:under|below|less than|max|maximum|budget(?: of)?|₦|ngn)\s*([\d.]+)\s*(k|000)?", text)
-    if not budget_context:
-        return None
-
-    amount = float(budget_context.group(1))
-    suffix = budget_context.group(2)
-    if suffix == "k" or amount < 1000:
-        amount *= 1000
-    return int(amount)
+    pattern = r"(?:₦|ngn\s*|(?:under|below|less than|max(?:imum)?|budget(?: of| to)?|spend|up to)\s*(?:₦|ngn)?\s*)(\d[\d,]*(?:\.\d+)?)\s*(k)?\b"
+    for match in re.finditer(pattern, text):
+        if re.match(r"\s*(?:minutes?|mins?|hours?|hrs?)\b", text[match.end():]):
+            continue
+        amount = float(match.group(1).replace(",", ""))
+        return min(10000000, int(amount * (1000 if match.group(2) else 1)))
+    return None
 
 
 def _significant_terms(text: str, place_types: list[str], requirements: list[str]) -> list[str]:

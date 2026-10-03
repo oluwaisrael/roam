@@ -3,7 +3,7 @@ from math import asin, cos, radians, sin, sqrt
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class Activity(str, Enum):
@@ -23,17 +23,18 @@ class NoiseLevel(str, Enum):
 
 
 class Location(BaseModel):
-    lat: float
-    lng: float
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
 
 
 class Intent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     activity: Activity = Activity.general
     place_types: list[str] = Field(default_factory=list)
     area: str | None = None
-    budget_max: int | None = None
-    duration_hours: float | None = None
-    max_minutes: int | None = None
+    budget_max: int | None = Field(default=None, ge=0, le=10000000)
+    duration_hours: float | None = Field(default=None, gt=0, le=48)
+    max_minutes: int | None = Field(default=None, gt=0, le=240)
     quiet: bool = False
     wifi: bool = False
     power: bool = False
@@ -81,9 +82,36 @@ class SearchRequest(BaseModel):
     location: Location | None = None
 
 
+class IntentChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    budget_max: int | None = Field(default=None, ge=0, le=10000000)
+    max_minutes: int | None = Field(default=None, gt=0, le=240)
+    quiet: bool | None = None
+    wifi: bool | None = None
+    power: bool | None = None
+    open_now: bool | None = None
+    romantic: bool | None = None
+    cheap: bool | None = None
+    priority: list[Literal["distance", "budget", "quiet", "wifi", "ambience", "food"]] | None = None
+
+    @model_validator(mode="after")
+    def disallow_null_switches(self):
+        for key in self.model_fields_set - {"budget_max", "max_minutes"}:
+            if getattr(self, key) is None:
+                raise ValueError(f"{key} cannot be null")
+        return self
+
+
 class RefineRequest(BaseModel):
-    search_id: str
-    change: dict
+    search_id: str = Field(max_length=64)
+    change: IntentChange = Field(default_factory=IntentChange)
+    query: str | None = Field(default=None, min_length=2, max_length=280)
+
+
+class Evidence(BaseModel):
+    label: str
+    value: str
+    status: Literal["listed", "estimated", "unknown", "demo"]
 
 
 class Result(BaseModel):
@@ -92,18 +120,21 @@ class Result(BaseModel):
     category: str
     area: str
     score: int
-    rating: float
+    rating: float | None
     price_level: int
     typical_spend: int
     distance_km: float | None = None
     travel_minutes: int | None = None
-    open_now: bool
+    open_now: bool | None
     match_reasons: list[str]
     tradeoffs: list[str]
     tags: list[str]
     data_source: str = "seed"
     photo_url: str | None = None
     photo_page_url: str | None = None
+    maps_url: str = ""
+    photos_url: str = ""
+    evidence: list[Evidence] = Field(default_factory=list)
 
 
 class DecisionInsight(BaseModel):
@@ -120,6 +151,11 @@ class SearchResponse(BaseModel):
     intent: Intent
     intelligence: DecisionInsight
     results: list[Result]
+    engine: Literal["ai", "rules"] = "rules"
+    engine_status: str = "Basic understanding"
+    suggestions: list[str] = Field(default_factory=list)
+    clarification: str | None = None
+    data_status: Literal["live", "demo", "unavailable"] = "live"
 
 
 def distance_km(origin: Location, destination: Location) -> float:
