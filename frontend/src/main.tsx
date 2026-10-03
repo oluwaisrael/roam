@@ -14,6 +14,7 @@ const moods = [
   { title: "Room to breathe", subtitle: "Green spaces & slower afternoons", icon: Leaf, image: "nature", query: "A peaceful park where I can read and unwind" },
 ];
 const defaultQuery = "";
+const LOCAL_LANGUAGE = /\b(near me|nearby|closest|around me|close to me)\b/i;
 
 function App() {
   const [theme, setTheme] = React.useState<"light" | "dark">(() => readStored("roam-theme", matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
@@ -47,6 +48,12 @@ function App() {
 
   async function requestSearch(nextQuery: string, options: { refine?: boolean; change?: Change; location?: Location } = {}) {
     if (!options.change && nextQuery.trim().length < 2) { input.current?.focus(); return; }
+    const namedArea = areas.some(a => a !== "Lagos" && nextQuery.toLowerCase().includes(a.toLowerCase())) || /\bvi\b/i.test(nextQuery);
+    let activeLocation = options.location ?? location;
+    if (!options.refine && !namedArea && !activeLocation && LOCAL_LANGUAGE.test(nextQuery)) {
+      activeLocation = await requestDeviceLocation();
+      if (!activeLocation) return;
+    }
     controller.current?.abort();
     const active = new AbortController();
     controller.current = active;
@@ -54,12 +61,11 @@ function App() {
     setLoading(true); setError(null); setView("explore");
     const refining = options.refine && data;
     // A named area in the prompt always takes precedence over the location picker.
-    const namedArea = areas.some(a => a !== "Lagos" && nextQuery.toLowerCase().includes(a.toLowerCase())) || /\bvi\b/i.test(nextQuery);
     const scopedQuery = !namedArea && area !== "Lagos" ? `${nextQuery} around ${area}` : nextQuery;
     try {
       const response = await searchApi(refining ? "search/refine" : "search", refining
         ? { search_id: data.search_id, ...(options.change ? { change: options.change } : { query: nextQuery.trim() }) }
-        : { query: scopedQuery.trim().slice(0, 280), location: options.location ?? location }, active.signal);
+        : { query: scopedQuery.trim().slice(0, 280), location: activeLocation }, active.signal);
       if (controller.current !== active) return;
       setData(response); setCompare([]); setSort("fit"); setFollowup("");
       if (!refining) { setQuery(nextQuery); setRecent(items => [nextQuery, ...items.filter(item => item !== nextQuery)].slice(0, 5)); }
@@ -73,20 +79,31 @@ function App() {
     }
   }
 
-  function getLocation() {
-    if (!navigator.geolocation) { setError("Location isn't supported by this browser. Choose a neighbourhood instead."); return; }
+  function requestDeviceLocation(): Promise<Location | null> {
+    if (!navigator.geolocation) {
+      setError("Location isn't supported by this browser. Choose a neighbourhood instead.");
+      return Promise.resolve(null);
+    }
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(position => {
+    return new Promise(resolve => navigator.geolocation.getCurrentPosition(position => {
       const nextLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
       setLocation(nextLocation);
       setArea("Lagos");
       setLocating(false);
-      if (query.trim().length >= 2) {
-        requestSearch(query, { location: nextLocation });
-      } else {
-        setNotice("Location is on. Your next search will stay nearby.");
-      }
-    }, () => { setLocating(false); setError("Location access is unavailable. Choose a neighbourhood instead."); }, { timeout: 8000, maximumAge: 300000 });
+      resolve(nextLocation);
+    }, () => {
+      setLocating(false);
+      setError("Roam needs your location for a 'near me' search. Allow location access or choose a neighbourhood.");
+      resolve(null);
+    }, { timeout: 8000, maximumAge: 300000 }));
+  }
+
+  function getLocation() {
+    void requestDeviceLocation().then(nextLocation => {
+      if (!nextLocation) return;
+      if (query.trim().length >= 2) requestSearch(query, { location: nextLocation });
+      else setNotice("Location is on. Your next search will stay nearby.");
+    });
   }
 
   function toggleSave(place: Place) {

@@ -99,6 +99,20 @@ test("current location is sent to the decision engine and keeps the local bounda
   expect(requestBody.location).toEqual({ lat: 6.52, lng: 3.37 });
 });
 
+test("near me asks for location and does not fall back to city-wide results", async ({ page }) => {
+  let requestBody: Record<string, unknown> = {};
+  await page.context().grantPermissions(["geolocation"]);
+  await page.context().setGeolocation({ latitude: 6.52, longitude: 3.37 });
+  await page.route("**/api/search", async route => {
+    requestBody = route.request().postDataJSON();
+    await route.fulfill({ json: response });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Coffee nearby" }).click();
+  await expect(page.getByText("Showing places within about 7 km of your current location", { exact: true })).toBeVisible();
+  expect(requestBody.location).toEqual({ lat: 6.52, lng: 3.37 });
+});
+
 test("empty results and network errors are recoverable", async ({ page }) => {
   await page.route("**/api/search", route => route.fulfill({ json: { ...response, results: [], data_status: "unavailable" } }));
   await page.goto("/");
@@ -115,7 +129,7 @@ test("empty results and network errors are recoverable", async ({ page }) => {
 test("cancelling a search does not replace the page with stale results", async ({ page }) => {
   await page.route("**/api/search", async route => { await new Promise(resolve => setTimeout(resolve, 1000)); await route.fulfill({ json: response }).catch(() => {}); });
   await page.goto("/");
-  await page.getByRole("textbox", { name: "What are you looking for?" }).fill("coffee near me");
+  await page.getByRole("textbox", { name: "What are you looking for?" }).fill("coffee around Yaba");
   await page.getByRole("button", { name: "Find my place" }).click();
   await page.getByRole("button", { name: "Cancel search" }).click();
   await expect(page.getByRole("heading", { name: "A change of scene." })).toBeVisible();
