@@ -19,7 +19,7 @@ app = FastAPI(title="Roam API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):51\d{2}",
+    allow_origin_regex=os.getenv("ROAM_CORS_ORIGIN_REGEX", r"http://(localhost|127\.0\.0\.1):51\d{2}"),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
