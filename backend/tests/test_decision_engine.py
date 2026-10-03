@@ -9,6 +9,7 @@ from app.query_parser import parse_query
 from app.query_parser import parse_followup
 from app.scoring import score_places
 from app.seed_data import PLACES
+from app.understanding import understand
 
 
 class BrokenProvider(PlaceProvider):
@@ -80,6 +81,16 @@ def test_followup_can_turn_off_previous_requirement():
     assert intent.wifi is False
     assert intent.power is True
     assert "wifi" not in intent.must_have
+
+
+def test_rules_understanding_can_ask_for_clarification(monkeypatch):
+    monkeypatch.setenv("ROAM_AI_PROVIDER", "rules")
+
+    _, engine, _, clarification = understand("vegan dinner around Lekki")
+
+    assert engine == "rules"
+    assert clarification is not None
+    assert "confirm" in clarification.lower()
 
 
 def test_named_area_changes_provider_search_origin():

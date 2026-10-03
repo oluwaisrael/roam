@@ -61,7 +61,7 @@ def understand(query: str, previous: Intent | None = None) -> tuple[Intent, str,
     fallback = parse_followup(query, previous) if previous else parse_query(query)
     provider = ai_provider()
     if provider not in {"openai", "ollama"}:
-        return fallback, "rules", "Basic understanding", None
+        return fallback, "rules", "Basic understanding", _rule_clarification(query)
     try:
         payload = {"request": query, "previous_intent": previous.model_dump(mode="json") if previous else None}
         plan = Interpretation.model_validate_json(_generate(provider, payload))
@@ -72,7 +72,7 @@ def understand(query: str, previous: Intent | None = None) -> tuple[Intent, str,
     except (URLError, OSError, ValueError, KeyError, TypeError) as error:
         # Never log request text, credentials or provider response bodies.
         logger.warning("AI interpretation unavailable: %s", type(error).__name__)
-        return fallback, "rules", "AI unavailable; basic understanding", None
+        return fallback, "rules", "AI unavailable; basic understanding", _rule_clarification(query)
 
 
 def _generate(provider: str, payload: dict) -> str:
@@ -115,3 +115,14 @@ def _generate(provider: str, payload: dict) -> str:
             if content.get("type") == "output_text":
                 return content["text"]
     raise ValueError("No structured interpretation")
+
+
+def _rule_clarification(query: str) -> str | None:
+    text = query.lower()
+    if any(word in text for word in ("hotel", "flight", "airport transfer", "shortlet")):
+        return "Roam currently recommends everyday places; should I look for cafes, restaurants, parks, bars, libraries, or coworking spots instead?"
+    if any(word in text for word in ("vegan", "halal", "gluten", "allergy", "wheelchair")):
+        return "That preference needs confirmation from the venue; should I still rank likely matches and flag it as something to verify?"
+    if "quiet" in text and any(word in text for word in ("loud", "club", "party")):
+        return "Do you want a quiet place, or a lively place where noise is acceptable?"
+    return None
