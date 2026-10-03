@@ -1,6 +1,8 @@
 from datetime import datetime
+from urllib.parse import urlencode
+from zoneinfo import ZoneInfo
 
-from app.models import Activity, Intent, Location, Place, Result, distance_km
+from app.models import Activity, Evidence, Intent, Location, Place, Result, distance_km
 
 
 BASE_WEIGHTS: dict[Activity, dict[str, float]] = {
@@ -14,12 +16,12 @@ BASE_WEIGHTS: dict[Activity, dict[str, float]] = {
 }
 
 
-def score_places(places: list[Place], intent: Intent, origin: Location | None = None) -> list[Result]:
-    results = [_score_place(place, intent, origin) for place in places]
+def score_places(places: list[Place], intent: Intent, origin: Location | None = None, at_hour: int | None = None) -> list[Result]:
+    results = [_score_place(place, intent, origin, at_hour) for place in places]
     return sorted(results, key=lambda result: result.score, reverse=True)
 
 
-def _score_place(place: Place, intent: Intent, origin: Location | None) -> Result:
+def _score_place(place: Place, intent: Intent, origin: Location | None, at_hour: int | None = None) -> Result:
     weights = BASE_WEIGHTS[intent.activity].copy()
     if intent.quiet:
         weights["quietness"] = weights.get("quietness", 0) + 1.2
@@ -48,7 +50,8 @@ def _score_place(place: Place, intent: Intent, origin: Location | None) -> Resul
 
     distance = distance_km(origin, place.location) if origin else None
     travel_minutes = round(distance / 24 * 60) if distance is not None else None
-    open_now = _is_open_now(place)
+    live = place.data_source != "seed"
+    open_now = (True if "open-24h" in place.tags else None) if live else _is_open_now(place, at_hour)
 
     components = {
         "quietness": place.quietness / 5,
@@ -59,7 +62,7 @@ def _score_place(place: Place, intent: Intent, origin: Location | None) -> Resul
         "food": place.food / 5,
         "date": place.date_friendly / 5,
         "quality": place.rating / 5,
-        "open": 1 if open_now else 0,
+        "open": 0.5 if open_now is None else int(open_now),
         "budget": _budget_fit(place, intent),
         "distance": _distance_fit(travel_minutes, intent),
         "category": _category_fit(place, intent),
@@ -83,6 +86,26 @@ def _score_place(place: Place, intent: Intent, origin: Location | None) -> Resul
 
     reasons = _match_reasons(place, intent, travel_minutes, open_now)
     tradeoffs = _tradeoffs(place, intent, travel_minutes, open_now)
+    if live:
+        reasons = [f"{place.category} matches your plans"]
+        if intent.budget_max is not None and place.typical_spend <= intent.budget_max:
+            reasons.append("Estimated spend fits your budget")
+        if intent.wifi and "wifi" in place.tags:
+            reasons.append("Wi-Fi listed on OpenStreetMap")
+        if distance is not None:
+            reasons.append(f"{distance:.1f} km straight-line distance")
+        tradeoffs = ["Prices, noise and amenities need confirmation"] + [item for item in tradeoffs if "budget" in item or "away" in item]
+        if intent.open_now and open_now is None:
+            tradeoffs.insert(0, "Current opening hours are unverified")
+    maps_url = "https://www.google.com/maps/search/?" + urlencode({"api": 1, "query": f"{place.location.lat},{place.location.lng}"})
+    photos_url = "https://www.google.com/search?" + urlencode({"tbm": "isch", "q": f"{place.name} {place.area} Lagos"})
+    evidence = [
+        Evidence(label="Budget", value=f"NGN {place.typical_spend:,} / person", status="estimated" if live else "demo"),
+        Evidence(label="Wi-Fi", value="Listed by the map contributor" if "wifi" in place.tags else "Not confirmed", status="listed" if "wifi" in place.tags else "unknown"),
+        Evidence(label="Quiet", value="Not confirmed", status="unknown"),
+        Evidence(label="Power", value="Not confirmed", status="unknown"),
+        Evidence(label="Hours", value="Listed as 24/7" if "open-24h" in place.tags else "Confirm before going", status="listed" if "open-24h" in place.tags else "unknown"),
+    ]
 
     return Result(
         place_id=place.id,
@@ -90,7 +113,7 @@ def _score_place(place: Place, intent: Intent, origin: Location | None) -> Resul
         category=place.category,
         area=place.area,
         score=score,
-        rating=place.rating,
+        rating=None if live else place.rating,
         price_level=place.price_level,
         typical_spend=place.typical_spend,
         distance_km=round(distance, 1) if distance is not None else None,
@@ -102,6 +125,9 @@ def _score_place(place: Place, intent: Intent, origin: Location | None) -> Resul
         data_source=place.data_source,
         photo_url=place.photo_url,
         photo_page_url=place.photo_page_url,
+        maps_url=maps_url,
+        photos_url=place.photo_page_url or photos_url,
+        evidence=evidence,
     )
 
 
@@ -125,26 +151,39 @@ def _distance_fit(minutes: int | None, intent: Intent) -> float:
 
 def _category_fit(place: Place, intent: Intent) -> float:
     terms = set(intent.raw_terms)
+    category = _normalized_category(place.category)
     if {"cafe", "coffee"} & terms:
-        if place.category == "Cafe":
+        if category == "cafe":
             return 1
-        if place.category in {"Quick food", "Restaurant"}:
+        if category in {"quick food", "restaurant"}:
             return 0.35
         return 0
     if "restaurant" in terms:
-        if place.category == "Restaurant":
+        if category == "restaurant":
             return 1
-        if place.category in {"Cafe", "Quick food"}:
+        if category in {"cafe", "quick food"}:
             return 0.35
         return 0
     return 0.7
 
 
-def _is_open_now(place: Place) -> bool:
-    hour = datetime.now().hour
+def _is_open_now(place: Place, at_hour: int | None = None) -> bool:
+    hour = datetime.now(ZoneInfo("Africa/Lagos")).hour if at_hour is None else at_hour
+    if place.closes_at < place.opens_at:
+        return hour >= place.opens_at or hour < place.closes_at
     if place.closes_at == 24:
         return place.opens_at <= hour <= 23
     return place.opens_at <= hour < place.closes_at
+
+
+def _normalized_category(category: str) -> str:
+    aliases = {
+        "coffee": "cafe",
+        "lounge": "bar",
+        "culture": "restaurant",
+    }
+    normalized = category.strip().lower()
+    return aliases.get(normalized, normalized)
 
 
 def _match_reasons(place: Place, intent: Intent, travel_minutes: int | None, open_now: bool) -> list[str]:

@@ -1,12 +1,17 @@
+from dataclasses import dataclass
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from app.intelligence import explain_decision
-from app.models import RefineRequest, Result, SearchRequest, SearchResponse
+from app.models import Intent, Location, RefineRequest, Result, SearchRequest, SearchResponse
 from app.providers import CompositePlaceProvider, NominatimPlaceProvider, OverpassPlaceProvider, SeedPlaceProvider
-from app.query_parser import parse_query
+from app.query_parser import normalize_intent
 from app.scoring import score_places
+from app.understanding import understand
 
 app = FastAPI(title="Roam API", version="0.1.0")
 
@@ -18,9 +23,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-SEARCH_MEMORY: dict[str, tuple[str, object]] = {}
+@dataclass
+class SearchContext:
+    query: str
+    intent: Intent
+    location: Location | None
+
+
+SEARCH_MEMORY: dict[str, SearchContext] = {}
 PHOTO_MEMORY: dict[str, dict[str, str]] = {}
 PLACE_PROVIDER = CompositePlaceProvider([OverpassPlaceProvider(), NominatimPlaceProvider()], SeedPlaceProvider())
+LAGOS_TIMEZONE = ZoneInfo("Africa/Lagos")
 
 
 @app.get("/api/health")
@@ -30,13 +43,8 @@ def health() -> dict[str, str]:
 
 @app.post("/api/search", response_model=SearchResponse)
 def search(request: SearchRequest) -> SearchResponse:
-    intent = parse_query(request.query)
-    places = PLACE_PROVIDER.search(intent, request.location)
-    results = score_places(places, intent, request.location)[:6]
-    response = SearchResponse(intent=intent, intelligence=explain_decision(intent, results), results=results)
-    SEARCH_MEMORY[response.search_id] = (request.query, request.location)
-    PHOTO_MEMORY[response.search_id] = _photo_links(results)
-    return response
+    intent, engine, engine_status, clarification = understand(request.query)
+    return _run_search(request.query, intent, request.location, engine, engine_status, clarification)
 
 
 @app.post("/api/search/refine", response_model=SearchResponse)
@@ -44,18 +52,72 @@ def refine(request: RefineRequest) -> SearchResponse:
     if request.search_id not in SEARCH_MEMORY:
         raise HTTPException(status_code=404, detail="Search not found")
 
-    query, location = SEARCH_MEMORY[request.search_id]
-    intent = parse_query(query)
-    for key, value in request.change.items():
-        if hasattr(intent, key):
-            setattr(intent, key, value)
+    context = SEARCH_MEMORY[request.search_id]
+    query = request.query or context.query
+    if request.query:
+        intent, engine, engine_status, clarification = understand(request.query, context.intent)
+    else:
+        intent = context.intent.model_copy(deep=True)
+        engine = "rules"
+        engine_status = "Refined with explicit controls"
+        clarification = None
+    changes = request.change.model_dump(exclude_unset=True)
+    if changes:
+        intent = normalize_intent(Intent.model_validate({**intent.model_dump(), **changes}), query)
 
+    return _run_search(query, intent, context.location, engine, engine_status, clarification)
+
+
+def _run_search(
+    query: str,
+    intent: Intent,
+    location: Location | None,
+    engine: str,
+    engine_status: str,
+    clarification: str | None,
+) -> SearchResponse:
     places = PLACE_PROVIDER.search(intent, location)
-    results = score_places(places, intent, location)[:6]
-    response = SearchResponse(intent=intent, intelligence=explain_decision(intent, results), results=results)
-    SEARCH_MEMORY[response.search_id] = (query, location)
+    results = score_places(places, intent, location, at_hour=_current_lagos_hour())[:6]
+    response = SearchResponse(
+        intent=intent,
+        intelligence=explain_decision(intent, results),
+        results=results,
+        engine=engine,
+        engine_status=engine_status,
+        suggestions=_suggestions(intent, results),
+        clarification=clarification,
+        data_status=_data_status(results),
+    )
+    SEARCH_MEMORY[response.search_id] = SearchContext(query=query, intent=intent, location=location)
     PHOTO_MEMORY[response.search_id] = _photo_links(results)
     return response
+
+
+def _current_lagos_hour() -> int:
+    return datetime.now(LAGOS_TIMEZONE).hour
+
+
+def _suggestions(intent: Intent, results: list[Result]) -> list[str]:
+    suggestions: list[str] = []
+    if intent.budget_max is None:
+        suggestions.append("Add a budget, e.g. under ₦15k")
+    if intent.max_minutes is None:
+        suggestions.append("Set a travel limit, e.g. within 15 minutes")
+    if not intent.area and not results:
+        suggestions.append("Name an area like Yaba, Ikoyi, VI, or Lekki")
+    if intent.activity == "work" and not intent.power:
+        suggestions.append("Say if power sockets matter")
+    if results and any(result.data_source != "seed" for result in results):
+        suggestions.append("Open the map or photo links to confirm live details")
+    return suggestions[:3]
+
+
+def _data_status(results: list[Result]) -> str:
+    if not results:
+        return "unavailable"
+    if all(result.data_source == "seed" for result in results):
+        return "demo"
+    return "live"
 
 
 @app.get("/api/search/{search_id}/places/{place_id}/photo")

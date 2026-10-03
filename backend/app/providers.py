@@ -1,5 +1,9 @@
 from abc import ABC, abstractmethod
 import json
+import os
+from collections import OrderedDict
+from threading import Lock
+from time import monotonic, sleep
 from urllib.error import URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
@@ -65,6 +69,8 @@ class OverpassPlaceProvider(PlaceProvider):
 
 class NominatimPlaceProvider(PlaceProvider):
     endpoint = "https://nominatim.openstreetmap.org/search"
+    _lock = Lock()
+    _last_request = 0.0
 
     def search(self, intent: Intent, location: Location | None) -> list[Place]:
         origin = _search_origin(intent, location)
@@ -72,7 +78,7 @@ class NominatimPlaceProvider(PlaceProvider):
         places: list[Place] = []
         seen_ids: set[str] = set()
 
-        for term in search_terms:
+        for term in search_terms[:2]:
             params = {
                 "q": term,
                 "format": "jsonv2",
@@ -91,8 +97,12 @@ class NominatimPlaceProvider(PlaceProvider):
                 method="GET",
             )
             try:
-                with urlopen(request, timeout=8) as response:
-                    data = json.loads(response.read().decode())
+                # Public Nominatim permits at most one request per second.
+                with self._lock:
+                    sleep(max(0, 1.1 - (monotonic() - type(self)._last_request)))
+                    type(self)._last_request = monotonic()
+                    with urlopen(request, timeout=6) as response:
+                        data = json.loads(response.read().decode())
             except (TimeoutError, URLError, OSError, json.JSONDecodeError):
                 continue
 
@@ -112,13 +122,27 @@ class CompositePlaceProvider(PlaceProvider):
     def __init__(self, providers: list[PlaceProvider], fallback: PlaceProvider) -> None:
         self.providers = providers
         self.fallback = fallback
+        self._cache: OrderedDict[str, tuple[float, list[Place]]] = OrderedDict()
+        self._lock = Lock()
 
     def search(self, intent: Intent, location: Location | None) -> list[Place]:
+        key = _build_overpass_query(intent, _search_origin(intent, location))
+        with self._lock:
+            cached = self._cache.get(key)
+            if cached and monotonic() - cached[0] < 300:
+                self._cache.move_to_end(key)
+                return [place.model_copy(deep=True) for place in cached[1]]
         for provider in self.providers:
             places = provider.search(intent, location)
-            if len(places) >= 3:
+            if places:
+                with self._lock:
+                    self._cache[key] = (monotonic(), places)
+                    while len(self._cache) > 128:
+                        self._cache.popitem(last=False)
                 return places
-        return self.fallback.search(intent, location)
+        if os.getenv("ROAM_DEMO_DATA", "false").lower() == "true":
+            return self.fallback.search(intent, location)
+        return []
 
 
 def _build_overpass_query(intent: Intent, origin: Location) -> str:
@@ -382,6 +406,8 @@ def _tags(category: str, tags: dict) -> list[str]:
     values = ["live data", "OpenStreetMap", "details limited", category.lower()]
     if tags.get("internet_access") in {"wlan", "yes"}:
         values.append("wifi")
+    if tags.get("opening_hours") == "24/7":
+        values.append("open-24h")
     if tags.get("outdoor_seating") == "yes":
         values.append("outdoor")
     if category in {"Cafe", "Coworking"}:
