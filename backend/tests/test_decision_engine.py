@@ -1,12 +1,13 @@
-from app.intelligence import explain_decision
-from app.main import PHOTO_MEMORY, SEARCH_MEMORY, SearchContext, _remember
 import pytest
+from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from app.models import Activity, RefineRequest, SearchRequest, Location
+from app import main
+from app.intelligence import explain_decision
+from app.main import PHOTO_MEMORY, SEARCH_MEMORY, SearchContext, _remember
+from app.models import Activity, Location, RefineRequest, SearchRequest
 from app.providers import CompositePlaceProvider, PlaceProvider, SeedPlaceProvider, _photo_page_url, _photo_url, _place_from_element, _search_origin
-from app.query_parser import parse_query
-from app.query_parser import parse_followup
+from app.query_parser import parse_followup, parse_query
 from app.scoring import score_places
 from app.seed_data import PLACES
 from app.understanding import understand
@@ -15,6 +16,11 @@ from app.understanding import understand
 class BrokenProvider(PlaceProvider):
     def search(self, intent, location):
         raise RuntimeError("provider failed")
+
+
+class StaticProvider(PlaceProvider):
+    def search(self, intent, location):
+        return PLACES
 
 
 def test_parse_work_query_extracts_constraints():
@@ -121,6 +127,33 @@ def test_search_memory_is_bounded(monkeypatch):
 
     assert list(SEARCH_MEMORY) == ["search-1", "search-2"]
     assert len(PHOTO_MEMORY) <= 2
+
+
+def test_search_endpoint_returns_decision_metadata(monkeypatch):
+    monkeypatch.setattr(main, "PLACE_PROVIDER", StaticProvider())
+    client = TestClient(main.app)
+
+    response = client.post("/api/search", json={"query": "quiet cafe in Yaba under ₦10k"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["engine"] in {"ai", "rules"}
+    assert body["data_status"] == "demo"
+    assert body["suggestions"]
+    assert body["results"][0]["evidence"]
+
+
+def test_refine_endpoint_accepts_followup_query(monkeypatch):
+    monkeypatch.setattr(main, "PLACE_PROVIDER", StaticProvider())
+    client = TestClient(main.app)
+    search = client.post("/api/search", json={"query": "quiet cafe with wifi"}).json()
+
+    response = client.post("/api/search/refine", json={"search_id": search["search_id"], "query": "closer and no wifi"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"]["wifi"] is False
+    assert body["intent"]["max_minutes"] == 15
 
 
 def test_work_query_prefers_work_friendly_places():
