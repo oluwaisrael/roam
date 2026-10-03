@@ -51,7 +51,10 @@ def _score_place(place: Place, intent: Intent, origin: Location | None, at_hour:
     distance = distance_km(origin, place.location) if origin else None
     travel_minutes = round(distance / 24 * 60) if distance is not None else None
     live = place.data_source != "seed"
-    open_now = (True if "open-24h" in place.tags else None) if live else _is_open_now(place, at_hour)
+    if live and "open-24h" not in place.tags and "hours-listed" not in place.tags:
+        open_now = None
+    else:
+        open_now = _is_open_now(place, at_hour)
 
     components = {
         "quietness": place.quietness / 5,
@@ -104,7 +107,7 @@ def _score_place(place: Place, intent: Intent, origin: Location | None, at_hour:
         Evidence(label="Wi-Fi", value="Listed by the map contributor" if "wifi" in place.tags else "Not confirmed", status="listed" if "wifi" in place.tags else "unknown"),
         Evidence(label="Quiet", value="Not confirmed", status="unknown"),
         Evidence(label="Power", value="Not confirmed", status="unknown"),
-        Evidence(label="Hours", value="Listed as 24/7" if "open-24h" in place.tags else "Confirm before going", status="listed" if "open-24h" in place.tags else "unknown"),
+        Evidence(label="Hours", value=_hours_evidence(place), status="listed" if {"open-24h", "hours-listed"} & set(place.tags) else "unknown"),
     ]
 
     return Result(
@@ -184,6 +187,14 @@ def _normalized_category(category: str) -> str:
     }
     normalized = category.strip().lower()
     return aliases.get(normalized, normalized)
+
+
+def _hours_evidence(place: Place) -> str:
+    if "open-24h" in place.tags:
+        return "Listed as 24/7"
+    if "hours-listed" in place.tags:
+        return f"Listed around {place.opens_at}:00-{place.closes_at}:00"
+    return "Confirm before going"
 
 
 def _match_reasons(place: Place, intent: Intent, travel_minutes: int | None, open_now: bool) -> list[str]:

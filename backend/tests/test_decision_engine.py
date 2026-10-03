@@ -129,6 +129,23 @@ def test_date_query_surfaces_ambience_and_tradeoffs():
     assert results[0].tradeoffs
 
 
+def test_live_listed_hours_can_satisfy_open_now():
+    place = _place_from_element(
+        {
+            "type": "node",
+            "id": 125,
+            "lat": 6.45,
+            "lon": 3.39,
+            "tags": {"name": "Listed Hours Cafe", "amenity": "cafe", "opening_hours": "08:00-22:00"},
+        }
+    )
+    intent = parse_query("cafe open now")
+    result = score_places([place], intent, at_hour=12)[0]
+
+    assert result.open_now is True
+    assert any(item.label == "Hours" and item.status == "listed" for item in result.evidence)
+
+
 def test_osm_element_normalizes_to_place():
     place = _place_from_element(
         {
@@ -151,6 +168,22 @@ def test_osm_element_normalizes_to_place():
     assert place.area == "Ikoyi"
     assert place.wifi == 4
     assert place.data_source == "OpenStreetMap"
+
+
+def test_osm_element_uses_simple_opening_hours():
+    place = _place_from_element(
+        {
+            "type": "node",
+            "id": 124,
+            "lat": 6.45,
+            "lon": 3.39,
+            "tags": {"name": "Evening Cafe", "amenity": "cafe", "opening_hours": "Mo-Su 08:00-22:00"},
+        }
+    )
+    assert place is not None
+    assert place.opens_at == 8
+    assert place.closes_at == 22
+    assert "hours-listed" in place.tags
 
 
 def test_commons_photo_paths_are_extracted():

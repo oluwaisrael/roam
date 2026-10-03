@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import json
 import os
+import re
 from collections import OrderedDict
 from threading import Lock
 from time import monotonic, sleep
@@ -398,9 +399,12 @@ def _heuristics_for_category(category: str, tags: dict) -> dict:
     elif internet == "no":
         baseline["wifi"] = 1
 
+    opening_range = _opening_hours_range(tags.get("opening_hours"))
     if tags.get("opening_hours") == "24/7":
         baseline["opens_at"] = 0
         baseline["closes_at"] = 24
+    elif opening_range:
+        baseline["opens_at"], baseline["closes_at"] = opening_range
 
     return baseline
 
@@ -411,6 +415,8 @@ def _tags(category: str, tags: dict) -> list[str]:
         values.append("wifi")
     if tags.get("opening_hours") == "24/7":
         values.append("open-24h")
+    elif _opening_hours_range(tags.get("opening_hours")):
+        values.append("hours-listed")
     if tags.get("outdoor_seating") == "yes":
         values.append("outdoor")
     if category in {"Cafe", "Coworking"}:
@@ -462,3 +468,18 @@ def _commons_filename(value: str) -> str | None:
     if "." in value and not value.startswith("Category:"):
         return value
     return None
+
+
+def _opening_hours_range(value: str | None) -> tuple[int, int] | None:
+    if not value:
+        return None
+    match = re.search(r"(\d{1,2})(?::\d{2})?\s*-\s*(\d{1,2})(?::\d{2})?", value)
+    if not match:
+        return None
+    opens_at = int(match.group(1))
+    closes_at = int(match.group(2))
+    if not (0 <= opens_at <= 23 and 0 <= closes_at <= 24):
+        return None
+    if opens_at == closes_at:
+        return None
+    return opens_at, closes_at
