@@ -172,6 +172,7 @@ class SearchResponse(BaseModel):
     suggestions: list[str] = Field(default_factory=list)
     clarification: str | None = None
     data_status: Literal["live", "demo", "unavailable"] = "live"
+    locality_note: str | None = None
 
 
 def distance_km(origin: Location, destination: Location) -> float:

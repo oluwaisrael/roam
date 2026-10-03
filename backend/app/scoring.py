@@ -15,9 +15,36 @@ BASE_WEIGHTS: dict[Activity, dict[str, float]] = {
     Activity.general: {"distance": 1.0, "budget": 0.8, "quality": 0.8, "ambience": 0.5},
 }
 
+# A phone location is an explicit expectation of local results. These values are
+# straight-line radii, deliberately conservative because road routes are longer.
+DEFAULT_LOCAL_RADIUS_KM = 8.0
+LOCAL_RADIUS_BY_ACTIVITY = {
+    Activity.quick_stop: 4.5,
+    Activity.work: 7.0,
+    Activity.read: 7.0,
+    Activity.general: 7.0,
+    Activity.eat: 9.0,
+    Activity.date: 10.0,
+    Activity.unwind: 9.0,
+}
+
+
+def local_distance_limit_km(intent: Intent, origin: Location | None) -> float | None:
+    """Return the strict distance boundary for a current-location search."""
+    if origin is None or intent.area:
+        return None
+    if intent.max_minutes:
+        # Typical Lagos road travel averages roughly 20 km/h after route overhead.
+        return round(max(1.5, min(DEFAULT_LOCAL_RADIUS_KM, intent.max_minutes * 0.33)), 1)
+    return LOCAL_RADIUS_BY_ACTIVITY.get(intent.activity, DEFAULT_LOCAL_RADIUS_KM)
+
 
 def score_places(places: list[Place], intent: Intent, origin: Location | None = None, at_hour: int | None = None) -> list[Result]:
-    results = [_score_place(place, intent, origin, at_hour) for place in places]
+    limit = local_distance_limit_km(intent, origin)
+    candidates = places
+    if limit is not None:
+        candidates = [place for place in places if distance_km(origin, place.location) <= limit]
+    results = [_score_place(place, intent, origin, at_hour) for place in candidates]
     return sorted(results, key=lambda result: result.score, reverse=True)
 
 

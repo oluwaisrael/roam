@@ -10,6 +10,7 @@ from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 from app.models import Activity, Intent, Location, Place
+from app.scoring import local_distance_limit_km
 from app.seed_data import PLACES
 
 
@@ -87,7 +88,7 @@ class NominatimPlaceProvider(PlaceProvider):
                 "addressdetails": "1",
                 "extratags": "1",
                 "bounded": "1",
-                "viewbox": _viewbox(origin),
+                "viewbox": _viewbox(origin, local_distance_limit_km(intent, location) or 10),
             }
             request = Request(
                 f"{self.endpoint}?{urlencode(params)}",
@@ -151,7 +152,10 @@ class CompositePlaceProvider(PlaceProvider):
 
 def _build_overpass_query(intent: Intent, origin: Location) -> str:
     radius = 6500
-    if intent.max_minutes:
+    local_limit = local_distance_limit_km(intent, origin)
+    if local_limit is not None:
+        radius = round(local_limit * 1000)
+    elif intent.max_minutes:
         radius = max(1500, min(15000, intent.max_minutes * 500))
 
     clauses = []
@@ -232,9 +236,9 @@ def _dedupe_filters(filters: list[tuple[str, str]]) -> list[tuple[str, str]]:
     return list(dict.fromkeys(filters))
 
 
-def _viewbox(origin: Location) -> str:
-    lat_delta = 0.16
-    lng_delta = 0.16
+def _viewbox(origin: Location, radius_km: float = 10) -> str:
+    lat_delta = radius_km / 111
+    lng_delta = radius_km / 110
     left = origin.lng - lng_delta
     right = origin.lng + lng_delta
     top = origin.lat + lat_delta

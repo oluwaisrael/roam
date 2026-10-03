@@ -8,7 +8,7 @@ from app.main import PHOTO_MEMORY, SEARCH_MEMORY, SearchContext, _remember
 from app.models import Activity, Location, RefineRequest, SearchRequest
 from app.providers import CompositePlaceProvider, PlaceProvider, SeedPlaceProvider, _photo_page_url, _photo_url, _place_from_element, _search_origin
 from app.query_parser import parse_followup, parse_query
-from app.scoring import score_places
+from app.scoring import local_distance_limit_km, score_places
 from app.seed_data import PLACES
 from app.understanding import understand
 
@@ -177,6 +177,24 @@ def test_work_query_prefers_work_friendly_places():
 
     assert results[0].name in {"Cafe One Yaba", "Cafe Neo Victoria Island", "MyYa's Cafe"}
     assert "Strong Wi-Fi" in results[0].match_reasons or "Reliable power access" in results[0].match_reasons
+
+
+def test_current_location_excludes_places_beyond_local_radius():
+    intent = parse_query("quiet cafe to work")
+    origin = Location(lat=6.52, lng=3.37)
+    nearby = PLACES[0].model_copy(update={"location": Location(lat=6.525, lng=3.375)})
+    far_away = PLACES[1].model_copy(update={"location": Location(lat=6.65, lng=3.37)})
+
+    results = score_places([nearby, far_away], intent, origin)
+
+    assert local_distance_limit_km(intent, origin) == 7.0
+    assert [result.place_id for result in results] == [nearby.id]
+
+
+def test_explicit_travel_time_sets_a_stricter_local_radius():
+    intent = parse_query("cafe near me within 10 minutes")
+
+    assert local_distance_limit_km(intent, Location(lat=6.52, lng=3.37)) == 3.3
 
 
 def test_date_query_surfaces_ambience_and_tradeoffs():

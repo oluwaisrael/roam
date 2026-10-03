@@ -56,6 +56,7 @@ export type SearchResponse = {
   suggestions: string[];
   clarification: string | null;
   data_status: "live" | "demo" | "unavailable";
+  locality_note: string | null;
 };
 
 export type Location = { lat: number; lng: number };

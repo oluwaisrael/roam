@@ -19,12 +19,11 @@ def explain_decision(intent: Intent, results: list[Result]) -> DecisionInsight:
     reason = _summary_reason(best)
     tradeoff = _first_real_tradeoff(best)
 
-    understood = f" I understood this as: {intent.interpretation}." if intent.interpretation else ""
-    summary = f"{best.name} is the strongest fit for {activity_label} because {reason}.{understood}"
+    summary = f"Start with {best.name} for {activity_label}: {reason}."
     if second:
         gap = best.score - second.score
         if gap <= 6:
-            summary += f" {second.name} is close behind, so this is a preference call rather than an obvious winner."
+            summary += f" {second.name} is a close alternative."
         elif gap >= 15:
             summary += f" It has a clear lead over {second.name}."
 
@@ -41,8 +40,10 @@ def explain_decision(intent: Intent, results: list[Result]) -> DecisionInsight:
 
 
 def _confidence(best: Result, second: Result | None) -> str:
+    if best.data_source == "seed":
+        return "low"
     if best.data_source != "seed" and "details limited" in best.tags:
-        return "medium"
+        return "low"
     if not second:
         return "medium" if best.score >= 70 else "low"
     gap = best.score - second.score
@@ -95,9 +96,9 @@ def _next_best_action(intent: Intent, best: Result) -> str:
 def _caveats(results: list[Result]) -> list[str]:
     caveats: list[str] = []
     if any("details limited" in result.tags for result in results):
-        caveats.append("Some live results come from OpenStreetMap, where Wi-Fi, noise, price, and ambience are often inferred.")
+        caveats.append("Place names and locations come from OpenStreetMap. Spend and suitability are estimates; noise and power are unverified.")
     if not any(result.photo_url for result in results):
-        caveats.append("No verified place photos were found in the current live data.")
+        caveats.append("No verified place photos were found. External photo searches may include unrelated images.")
     if any(result.data_source == "seed" for result in results):
-        caveats.append("Some fallback places may be seeded demo data rather than live provider results.")
+        caveats.append("These are demo results, not verified live recommendations.")
     return caveats[:3]

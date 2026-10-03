@@ -12,7 +12,7 @@ from app.intelligence import explain_decision
 from app.models import Activity, Intent, Location, RefineRequest, Result, SearchRequest, SearchResponse
 from app.providers import CompositePlaceProvider, NominatimPlaceProvider, OverpassPlaceProvider, SeedPlaceProvider
 from app.query_parser import normalize_intent
-from app.scoring import score_places
+from app.scoring import local_distance_limit_km, score_places
 from app.understanding import understand
 
 app = FastAPI(title="Roam API", version="0.1.0")
@@ -95,6 +95,7 @@ def _run_search(
         suggestions=_suggestions(intent, results),
         clarification=clarification,
         data_status=_data_status(results),
+        locality_note=_locality_note(intent, location),
     )
     _remember(response.search_id, SearchContext(query=query, intent=intent, location=location), _photo_links(results))
     return response
@@ -135,6 +136,13 @@ def _data_status(results: list[Result]) -> str:
     if all(result.data_source == "seed" for result in results):
         return "demo"
     return "live"
+
+
+def _locality_note(intent: Intent, location: Location | None) -> str | None:
+    limit = local_distance_limit_km(intent, location)
+    if limit is None:
+        return None
+    return f"Showing places within about {limit:g} km of your current location"
 
 
 @app.get("/api/search/{search_id}/places/{place_id}/photo")
