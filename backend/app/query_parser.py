@@ -143,8 +143,19 @@ def parse_followup(query: str, previous: Intent) -> Intent:
         changes.update(quiet=True, priority=["quiet"])
     if any(word in text for word in ("no budget limit", "remove budget", "budget doesn't matter")):
         changes.update(budget_max=None, cheap=False)
-        changes["priority"] = [item for item in changes["priority"] if item != "budget"]
+        existing_priority = changes.get("priority", previous.priority)
+        changes["priority"] = [item for item in existing_priority if item != "budget"]
+    for key, words in REQUIREMENT_KEYWORDS.items():
+        if _negates_requirement(text, words):
+            changes[key] = False
     return normalize_intent(Intent.model_validate({**previous.model_dump(), **changes}), text)
+
+
+def _negates_requirement(text: str, words: set[str]) -> bool:
+    for word in words:
+        if re.search(rf"(?:don't need|do not need|don't care about|without|no|ignore)\s+(?:the\s+)?{re.escape(word)}\b|{re.escape(word)}\s+(?:doesn't matter|does not matter|is optional|isn't necessary)", text):
+            return True
+    return False
 
 
 def _normalize(query: str) -> str:

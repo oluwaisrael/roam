@@ -2,6 +2,7 @@ from app.intelligence import explain_decision
 from app.models import Activity, Location
 from app.providers import _photo_page_url, _photo_url, _place_from_element, _search_origin
 from app.query_parser import parse_query
+from app.query_parser import parse_followup
 from app.scoring import score_places
 from app.seed_data import PLACES
 
@@ -30,6 +31,25 @@ def test_parse_prompt_understands_area_avoid_and_priority():
     assert "distance" in intent.priority
     assert "restaurant" in intent.place_types or "bar" in intent.place_types or intent.romantic is True
     assert "around Lekki" in intent.interpretation
+
+
+def test_followup_can_remove_budget_without_losing_context():
+    previous = parse_query("quiet cafe in Yaba under ₦10k with wifi")
+    intent = parse_followup("remove budget", previous)
+
+    assert intent.area == "Yaba"
+    assert intent.budget_max is None
+    assert "budget" not in intent.priority
+    assert intent.wifi is True
+
+
+def test_followup_can_turn_off_previous_requirement():
+    previous = parse_query("quiet cafe with wifi and power")
+    intent = parse_followup("wifi does not matter", previous)
+
+    assert intent.wifi is False
+    assert intent.power is True
+    assert "wifi" not in intent.must_have
 
 
 def test_named_area_changes_provider_search_origin():
