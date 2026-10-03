@@ -220,13 +220,20 @@ def _extract_avoid(text: str) -> list[str]:
 
 
 def _parse_budget(text: str) -> int | None:
-    pattern = r"(?:₦|ngn\s*|(?:under|below|less than|max(?:imum)?|budget(?: of| to)?|spend|up to)\s*(?:₦|ngn)?\s*)(\d[\d,]*(?:\.\d+)?)\s*(k)?\b"
-    for match in re.finditer(pattern, text):
+    prefix_pattern = r"(?:₦|ngn\s*|(?:under|below|less than|max(?:imum)?|budget(?: of| to)?|spend|up to)\s*(?:₦|ngn)?\s*)(\d[\d,]*(?:\.\d+)?)\s*(k)?\b"
+    suffix_pattern = r"\b(\d[\d,]*(?:\.\d+)?)\s*(k)?\s*(?:budget|max(?:imum)?|or less|and below)\b"
+    for match in re.finditer(prefix_pattern, text):
         if re.match(r"\s*(?:minutes?|mins?|hours?|hrs?)\b", text[match.end():]):
             continue
-        amount = float(match.group(1).replace(",", ""))
-        return min(10000000, int(amount * (1000 if match.group(2) else 1)))
+        return _budget_amount(match)
+    for match in re.finditer(suffix_pattern, text):
+        return _budget_amount(match)
     return None
+
+
+def _budget_amount(match: re.Match) -> int:
+    amount = float(match.group(1).replace(",", ""))
+    return min(10000000, int(amount * (1000 if match.group(2) else 1)))
 
 
 def _significant_terms(text: str, place_types: list[str], requirements: list[str]) -> list[str]:

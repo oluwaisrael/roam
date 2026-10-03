@@ -26,6 +26,12 @@ def test_parse_work_query_extracts_constraints():
     assert "power" in intent.must_have
 
 
+def test_parse_budget_handles_suffix_and_commas():
+    assert parse_query("cafe with 10k budget").budget_max == 10000
+    assert parse_query("dinner ₦10,500 max").budget_max == 10500
+    assert parse_query("restaurant within 10 minutes").budget_max is None
+
+
 def test_parse_prompt_understands_area_avoid_and_priority():
     intent = parse_query("date spot around Lekki under ₦30k, not noisy, distance matters more")
 
