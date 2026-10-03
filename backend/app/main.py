@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from collections import OrderedDict
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException
@@ -30,8 +31,9 @@ class SearchContext:
     location: Location | None
 
 
-SEARCH_MEMORY: dict[str, SearchContext] = {}
-PHOTO_MEMORY: dict[str, dict[str, str]] = {}
+MAX_MEMORY_ITEMS = 200
+SEARCH_MEMORY: OrderedDict[str, SearchContext] = OrderedDict()
+PHOTO_MEMORY: OrderedDict[str, dict[str, str]] = OrderedDict()
 PLACE_PROVIDER = CompositePlaceProvider([OverpassPlaceProvider(), NominatimPlaceProvider()], SeedPlaceProvider())
 LAGOS_TIMEZONE = ZoneInfo("Africa/Lagos")
 
@@ -88,13 +90,22 @@ def _run_search(
         clarification=clarification,
         data_status=_data_status(results),
     )
-    SEARCH_MEMORY[response.search_id] = SearchContext(query=query, intent=intent, location=location)
-    PHOTO_MEMORY[response.search_id] = _photo_links(results)
+    _remember(response.search_id, SearchContext(query=query, intent=intent, location=location), _photo_links(results))
     return response
 
 
 def _current_lagos_hour() -> int:
     return datetime.now(LAGOS_TIMEZONE).hour
+
+
+def _remember(search_id: str, context: SearchContext, photo_links: dict[str, str]) -> None:
+    SEARCH_MEMORY[search_id] = context
+    PHOTO_MEMORY[search_id] = photo_links
+    while len(SEARCH_MEMORY) > MAX_MEMORY_ITEMS:
+        old_search_id, _ = SEARCH_MEMORY.popitem(last=False)
+        PHOTO_MEMORY.pop(old_search_id, None)
+    while len(PHOTO_MEMORY) > MAX_MEMORY_ITEMS:
+        PHOTO_MEMORY.popitem(last=False)
 
 
 def _suggestions(intent: Intent, results: list[Result]) -> list[str]:

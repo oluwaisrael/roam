@@ -1,4 +1,5 @@
 from app.intelligence import explain_decision
+from app.main import PHOTO_MEMORY, SEARCH_MEMORY, SearchContext, _remember
 from app.models import Activity, Location
 from app.providers import CompositePlaceProvider, PlaceProvider, SeedPlaceProvider, _photo_page_url, _photo_url, _place_from_element, _search_origin
 from app.query_parser import parse_query
@@ -86,6 +87,19 @@ def test_composite_provider_falls_back_when_enabled(monkeypatch):
 
     assert places
     assert places[0].data_source == "seed"
+
+
+def test_search_memory_is_bounded(monkeypatch):
+    monkeypatch.setattr("app.main.MAX_MEMORY_ITEMS", 2)
+    SEARCH_MEMORY.clear()
+    PHOTO_MEMORY.clear()
+    intent = parse_query("quiet cafe")
+
+    for index in range(3):
+        _remember(f"search-{index}", SearchContext(query="quiet cafe", intent=intent, location=None), {})
+
+    assert list(SEARCH_MEMORY) == ["search-1", "search-2"]
+    assert len(PHOTO_MEMORY) <= 2
 
 
 def test_work_query_prefers_work_friendly_places():
