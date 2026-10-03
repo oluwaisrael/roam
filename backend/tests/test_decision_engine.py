@@ -1,6 +1,9 @@
 from app.intelligence import explain_decision
 from app.main import PHOTO_MEMORY, SEARCH_MEMORY, SearchContext, _remember
-from app.models import Activity, Location
+import pytest
+from pydantic import ValidationError
+
+from app.models import Activity, RefineRequest, SearchRequest, Location
 from app.providers import CompositePlaceProvider, PlaceProvider, SeedPlaceProvider, _photo_page_url, _photo_url, _place_from_element, _search_origin
 from app.query_parser import parse_query
 from app.query_parser import parse_followup
@@ -25,6 +28,13 @@ def test_parse_work_query_extracts_constraints():
     assert intent.place_types == ["cafe"]
     assert "wifi" in intent.must_have
     assert "power" in intent.must_have
+
+
+def test_requests_strip_text_and_reject_empty_refine():
+    assert SearchRequest(query="  quiet cafe  ").query == "quiet cafe"
+    assert RefineRequest(search_id="  abc  ", query="  closer  ").search_id == "abc"
+    with pytest.raises(ValidationError):
+        RefineRequest(search_id="abc")
 
 
 def test_parse_budget_handles_suffix_and_commas():

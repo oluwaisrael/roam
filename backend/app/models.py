@@ -3,7 +3,7 @@ from math import asin, cos, radians, sin, sqrt
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class Activity(str, Enum):
@@ -81,6 +81,11 @@ class SearchRequest(BaseModel):
     query: str = Field(min_length=2, max_length=280)
     location: Location | None = None
 
+    @field_validator("query", mode="before")
+    @classmethod
+    def strip_query(cls, value: str) -> str:
+        return value.strip()
+
 
 class IntentChange(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -106,6 +111,17 @@ class RefineRequest(BaseModel):
     search_id: str = Field(max_length=64)
     change: IntentChange = Field(default_factory=IntentChange)
     query: str | None = Field(default=None, min_length=2, max_length=280)
+
+    @field_validator("search_id", "query", mode="before")
+    @classmethod
+    def strip_text(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else value
+
+    @model_validator(mode="after")
+    def require_query_or_change(self):
+        if self.query is None and not self.change.model_fields_set:
+            raise ValueError("query or change is required")
+        return self
 
 
 class Evidence(BaseModel):
