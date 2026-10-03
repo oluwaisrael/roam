@@ -1,10 +1,15 @@
 from app.intelligence import explain_decision
 from app.models import Activity, Location
-from app.providers import _photo_page_url, _photo_url, _place_from_element, _search_origin
+from app.providers import CompositePlaceProvider, PlaceProvider, SeedPlaceProvider, _photo_page_url, _photo_url, _place_from_element, _search_origin
 from app.query_parser import parse_query
 from app.query_parser import parse_followup
 from app.scoring import score_places
 from app.seed_data import PLACES
+
+
+class BrokenProvider(PlaceProvider):
+    def search(self, intent, location):
+        raise RuntimeError("provider failed")
 
 
 def test_parse_work_query_extracts_constraints():
@@ -58,6 +63,15 @@ def test_named_area_changes_provider_search_origin():
 
     assert round(origin.lat, 3) == 6.470
     assert round(origin.lng, 3) == 3.585
+
+
+def test_composite_provider_falls_back_when_enabled(monkeypatch):
+    monkeypatch.setenv("ROAM_DEMO_DATA", "true")
+    provider = CompositePlaceProvider([BrokenProvider()], SeedPlaceProvider())
+    places = provider.search(parse_query("quiet cafe in Yaba"), None)
+
+    assert places
+    assert places[0].data_source == "seed"
 
 
 def test_work_query_prefers_work_friendly_places():

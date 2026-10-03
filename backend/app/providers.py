@@ -133,13 +133,16 @@ class CompositePlaceProvider(PlaceProvider):
                 self._cache.move_to_end(key)
                 return [place.model_copy(deep=True) for place in cached[1]]
         for provider in self.providers:
-            places = provider.search(intent, location)
+            try:
+                places = provider.search(intent, location)
+            except Exception:
+                places = []
             if places:
                 with self._lock:
                     self._cache[key] = (monotonic(), places)
                     while len(self._cache) > 128:
                         self._cache.popitem(last=False)
-                return places
+                return [place.model_copy(deep=True) for place in places]
         if os.getenv("ROAM_DEMO_DATA", "false").lower() == "true":
             return self.fallback.search(intent, location)
         return []
