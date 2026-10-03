@@ -18,11 +18,19 @@ Roam fetches real place names, categories, and coordinates from OpenStreetMap us
 
 OpenStreetMap does not reliably provide decision attributes like Wi-Fi quality, noise level, price, power access, or ambience, so Roam uses conservative category heuristics for those fields and marks live results with `data_source: OpenStreetMap` plus `details limited` tags.
 
+Demo fallback data is opt-in through `ROAM_DEMO_DATA=true`. Without that setting, live provider failure returns an honest unavailable state instead of silently mixing demo places into a real search.
+
 When OSM includes `image`, `wikimedia_commons`, or `wikidata` tags, results include `photo_url` and/or `photo_page_url`. Recent search results can also redirect through:
 
 ```text
 /api/search/{search_id}/places/{place_id}/photo
 ```
+
+## Understanding
+
+Roam can use a language model to turn a natural-language request into structured intent, while retrieval, ranking, evidence, and recommendations stay deterministic. Set `ROAM_AI_PROVIDER=openai` with `OPENAI_API_KEY`, or use `ROAM_AI_PROVIDER=ollama` with a local Ollama server. If no provider is configured or a provider fails, Roam falls back to the rules parser and still returns clarification prompts when a request needs verification.
+
+Copy `.env.example` for the supported environment variables.
 
 ## Run Locally
 
