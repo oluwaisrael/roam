@@ -130,6 +130,17 @@ class Evidence(BaseModel):
     status: Literal["listed", "estimated", "unknown", "demo"]
 
 
+class ReviewOpinion(BaseModel):
+    source: Literal["Google reviews"]
+    rating: float | None = Field(default=None, ge=0, le=5)
+    review_count: int | None = Field(default=None, ge=0)
+    sample_size: int = Field(ge=1)
+    opinion: str = Field(min_length=1, max_length=300)
+    praise: list[str] = Field(default_factory=list, max_length=3)
+    cautions: list[str] = Field(default_factory=list, max_length=3)
+    reviews_url: str | None = None
+
+
 class Result(BaseModel):
     place_id: str
     name: str
@@ -151,6 +162,7 @@ class Result(BaseModel):
     maps_url: str = ""
     photos_url: str = ""
     evidence: list[Evidence] = Field(default_factory=list)
+    review_opinion: ReviewOpinion | None = None
 
 
 class DecisionInsight(BaseModel):

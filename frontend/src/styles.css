@@ -165,6 +165,13 @@ textarea::placeholder, input::placeholder { color: var(--muted); opacity: .85; }
 .place-reasons { min-height: 69px; padding: 14px 0 6px; }
 .place-reasons p { display: flex; align-items: flex-start; gap: 6px; font-size: 11px; line-height: 1.6; margin-bottom: 6px; }
 .place-reasons svg { color: #779953; margin-top: 2px; }
+.review-opinion { margin: 4px 0 10px; padding: 12px; border-radius: 5px; background: var(--accent-soft); color: var(--text); }
+.review-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 10px; }
+.review-heading span { display: flex; align-items: center; gap: 6px; font-weight: 650; color: var(--accent-ink); }
+.review-heading strong { color: var(--text); font-weight: 600; }
+.review-opinion > p { margin-top: 8px; font-size: 11px; line-height: 1.65; }
+.review-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 9px; font-size: 9px; color: var(--muted); }
+.review-meta a { display: inline-flex; align-items: center; gap: 3px; color: var(--accent-ink); font-weight: 650; white-space: nowrap; }
 .place-details summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; min-height: 32px; font-size: 10px; color: var(--muted); }
 .place-details summary::-webkit-details-marker { display: none; }
 .place-details[open] summary > svg { transform: rotate(180deg); }
@@ -309,6 +316,8 @@ textarea::placeholder, input::placeholder { color: var(--muted); opacity: .85; }
   .place-metrics strong { font-size: 14px; }
   .place-metrics small { font-size: 10px; }
   .place-reasons p { font-size: 12px; }
+  .review-opinion > p { font-size: 12px; }
+  .review-meta { font-size: 10px; }
   .place-details summary { min-height: 40px; font-size: 11px; }
   .place-actions a { min-height: 44px; font-size: 11px; }
   .place-actions .icon-button { min-width: 40px; height: 44px; }

@@ -18,6 +18,10 @@ Roam fetches real place names, categories, and coordinates from OpenStreetMap us
 
 OpenStreetMap does not reliably provide decision attributes like Wi-Fi quality, noise level, price, power access, or ambience, so Roam uses conservative category heuristics for those fields and marks live results with `data_source: OpenStreetMap` plus `details limited` tags.
 
+## Review Intelligence
+
+If `GOOGLE_PLACES_API_KEY` is configured with Places API (New), Roam enriches the top three local results with an attributed opinion based on the review text returned for the matched venue. It shows the sample size, rating when available, recurring praise/cautions, and a link to the reviews. It does not invent an opinion when no review text is available.
+
 Demo fallback data is opt-in through `ROAM_DEMO_DATA=true`. Without that setting, live provider failure returns an honest unavailable state instead of silently mixing demo places into a real search.
 
 When OSM includes `image`, `wikimedia_commons`, or `wikidata` tags, results include `photo_url` and/or `photo_page_url`. Recent search results can also redirect through:

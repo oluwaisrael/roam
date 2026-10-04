@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowUpRight, Bookmark, Check, ChevronDown, Coffee, ExternalLink, GitCompareArrows, Image, MapPin, Navigation, X } from "lucide-react";
+import { ArrowUpRight, Bookmark, Check, ChevronDown, Coffee, ExternalLink, GitCompareArrows, Image, MapPin, MessageCircle, Navigation, X } from "lucide-react";
 import type { Place } from "./types";
 
 export const money = (amount: number) => `₦${amount.toLocaleString("en-NG")}`;
@@ -13,6 +13,7 @@ export function PlaceCard({ place, index, saved, selected, onSave, onCompare }: 
   const photo = safeUrl(place.photo_url);
   const map = safeUrl(place.maps_url) || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${place.name} ${place.area} Lagos`)}`;
   const photos = safeUrl(place.photos_url) || `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${place.name} ${place.area} Lagos`)}`;
+  const reviewLink = safeUrl(place.review_opinion?.reviews_url);
   return <article className={`place-card ${selected ? "selected" : ""}`}>
     <div className="place-topline">
       <span className={index === 0 ? "rank first" : "rank"}>{index === 0 ? <><span className="small-dot" /> Top fit</> : `0${index + 1}`}</span>
@@ -26,6 +27,11 @@ export function PlaceCard({ place, index, saved, selected, onSave, onCompare }: 
     </div>
     <div className="place-metrics"><span><strong>{money(place.typical_spend)}</strong><small>est. / person</small></span><span><strong>{place.distance_km !== null ? `${place.distance_km} km` : "Lagos"}</strong><small>{place.distance_km !== null ? "straight-line distance" : "location listed"}</small></span></div>
     <div className="place-reasons">{place.match_reasons.slice(0, 2).map(reason => <p key={reason}><Check size={14} /><span>{reason}</span></p>)}</div>
+    {place.review_opinion && <section className="review-opinion" aria-label="Review-based opinion">
+      <div className="review-heading"><span><MessageCircle size={15} />What reviewers say</span>{place.review_opinion.rating !== null && <strong>{place.review_opinion.rating.toFixed(1)} / 5</strong>}</div>
+      <p>{place.review_opinion.opinion}</p>
+      <div className="review-meta"><span>Based on {place.review_opinion.sample_size} returned review{place.review_opinion.sample_size === 1 ? "" : "s"}</span>{reviewLink && <a href={reviewLink} target="_blank" rel="noreferrer">Read reviews <ArrowUpRight size={12} /></a>}</div>
+    </section>}
     <details className="place-details"><summary>Why this place <ChevronDown size={16} /></summary><div className="evidence-list">{place.evidence.map(item => <div key={item.label}><span>{item.label}</span><div><strong>{item.value}</strong><small className={item.status}>{item.status}</small></div></div>)}</div><p className="tradeoff"><strong>The tradeoff</strong>{place.tradeoffs.filter(t => t !== "No major tradeoff for this request").join(". ") || "No clear tradeoff in the available data."}</p></details>
     <div className="place-actions"><a href={map} target="_blank" rel="noreferrer"><Navigation size={15} /> Directions <ArrowUpRight size={13} /></a><a href={photos} target="_blank" rel="noreferrer" title="Find pictures of this place"><Image size={15} /> Photos</a><button className={`icon-button ${selected ? "active" : ""}`} onClick={onCompare} title={selected ? "Remove from comparison" : "Compare place"} aria-label={`Compare ${place.name}`} aria-pressed={selected}><GitCompareArrows size={18} /></button></div>
   </article>;

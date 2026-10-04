@@ -12,6 +12,7 @@ from app.intelligence import explain_decision
 from app.models import Activity, Intent, Location, RefineRequest, Result, SearchRequest, SearchResponse
 from app.providers import CompositePlaceProvider, NominatimPlaceProvider, OverpassPlaceProvider, SeedPlaceProvider
 from app.query_parser import normalize_intent
+from app.reviews import enrich_with_reviews
 from app.scoring import local_distance_limit_km, score_places
 from app.understanding import understand
 
@@ -86,6 +87,7 @@ def _run_search(
 ) -> SearchResponse:
     places = PLACE_PROVIDER.search(intent, location)
     results = score_places(places, intent, location, at_hour=_current_lagos_hour())[:6]
+    results = enrich_with_reviews(results)
     response = SearchResponse(
         intent=intent,
         intelligence=explain_decision(intent, results),

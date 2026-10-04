@@ -13,6 +13,7 @@ const response = {
     tags: ["details limited"], data_source: "OpenStreetMap", photo_url: null, photo_page_url: null,
     maps_url: "https://www.google.com/maps/search/?api=1&query=6.5,3.3", photos_url: "https://www.google.com/search?tbm=isch&q=test+cafe",
     evidence: [{ label: "Wi-Fi", value: "Listed by the map contributor", status: "listed" }, { label: "Power", value: "Not confirmed", status: "unknown" }],
+    review_opinion: index === 0 ? { source: "Google reviews", rating: 4.3, review_count: 120, sample_size: 2, opinion: "The available review sample is positive about coffee and service.", praise: ["coffee", "service"], cautions: [], reviews_url: "https://www.google.com/maps" } : null,
   })),
 };
 
@@ -55,6 +56,8 @@ test("search, save, compare, details and contextual refinements", async ({ page 
   await page.goto("/");
   await search(page);
   await expect(page.getByText("AI understanding", { exact: true })).toBeVisible();
+  await expect(page.getByText("What reviewers say", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Read reviews" })).toHaveAttribute("href", "https://www.google.com/maps");
   await assertFits(page);
   await page.screenshot({ path: info.outputPath("results-light.png"), fullPage: true });
   await page.getByRole("button", { name: "Save Test Cafe", exact: true }).click();

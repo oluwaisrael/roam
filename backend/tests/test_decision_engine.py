@@ -8,6 +8,7 @@ from app.main import PHOTO_MEMORY, SEARCH_MEMORY, SearchContext, _remember
 from app.models import Activity, Location, RefineRequest, SearchRequest
 from app.providers import CompositePlaceProvider, PlaceProvider, SeedPlaceProvider, _photo_page_url, _photo_url, _place_from_element, _search_origin
 from app.query_parser import parse_followup, parse_query
+from app.reviews import summarize_reviews
 from app.scoring import local_distance_limit_km, score_places
 from app.seed_data import PLACES
 from app.understanding import understand
@@ -195,6 +196,25 @@ def test_explicit_travel_time_sets_a_stricter_local_radius():
     intent = parse_query("cafe near me within 10 minutes")
 
     assert local_distance_limit_km(intent, Location(lat=6.52, lng=3.37)) == 3.3
+
+
+def test_review_opinion_uses_only_signals_found_in_review_text():
+    opinion = summarize_reviews(
+        [
+            "The staff were friendly and the coffee was excellent. Quiet place to work.",
+            "Great ambience, but service was slow when it got busy.",
+        ],
+        rating=4.3,
+        review_count=120,
+        reviews_url="https://www.google.com/maps",
+    )
+
+    assert opinion.source == "Google reviews"
+    assert opinion.sample_size == 2
+    assert "service" in opinion.praise
+    assert "slow service" in opinion.cautions
+    assert "parking" not in opinion.cautions
+    assert "praises" in opinion.opinion
 
 
 def test_date_query_surfaces_ambience_and_tradeoffs():

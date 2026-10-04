@@ -37,6 +37,16 @@ export type Place = {
   maps_url: string;
   photos_url: string;
   evidence: { label: string; value: string; status: string }[];
+  review_opinion: {
+    source: "Google reviews";
+    rating: number | null;
+    review_count: number | null;
+    sample_size: number;
+    opinion: string;
+    praise: string[];
+    cautions: string[];
+    reviews_url: string | null;
+  } | null;
 };
 
 export type SearchResponse = {
