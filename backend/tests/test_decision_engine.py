@@ -6,7 +6,7 @@ from app import main
 from app.intelligence import explain_decision
 from app.main import PHOTO_MEMORY, SEARCH_MEMORY, SearchContext, _remember
 from app.models import Activity, Location, RefineRequest, SearchRequest
-from app.providers import CompositePlaceProvider, PlaceProvider, SeedPlaceProvider, _photo_page_url, _photo_url, _place_from_element, _search_origin
+from app.providers import CompositePlaceProvider, PlaceProvider, SeedPlaceProvider, _build_overpass_query, _photo_page_url, _photo_url, _place_from_element, _search_origin
 from app.query_parser import parse_followup, parse_query
 from app.reviews import summarize_reviews
 from app.scoring import local_distance_limit_km, score_places
@@ -196,6 +196,34 @@ def test_explicit_travel_time_sets_a_stricter_local_radius():
     intent = parse_query("cafe near me within 10 minutes")
 
     assert local_distance_limit_km(intent, Location(lat=6.52, lng=3.37)) == 3.3
+
+
+def test_overpass_local_radius_requires_device_location():
+    intent = parse_query("quiet cafe")
+    origin = Location(lat=6.5244, lng=3.3792)
+
+    default_query = _build_overpass_query(intent, origin)
+    local_query = _build_overpass_query(intent, origin, origin)
+
+    assert "around:6500" in default_query
+    assert "around:4500" in local_query
+
+
+def test_area_search_scores_from_area_center_when_location_exists(monkeypatch):
+    monkeypatch.setattr(main, "PLACE_PROVIDER", StaticProvider())
+    client = TestClient(main.app)
+
+    response = client.post(
+        "/api/search",
+        json={"query": "cafe around Yaba", "location": {"lat": 6.4281, "lng": 3.4219}},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"]["area"] == "Yaba"
+    assert body["locality_note"] is None
+    assert body["results"][0]["area"] == "Yaba"
+    assert body["results"][0]["distance_km"] < 3
 
 
 def test_review_opinion_uses_only_signals_found_in_review_text():

@@ -45,7 +45,7 @@ class OverpassPlaceProvider(PlaceProvider):
 
     def search(self, intent: Intent, location: Location | None) -> list[Place]:
         origin = _search_origin(intent, location)
-        query = _build_overpass_query(intent, origin)
+        query = _build_overpass_query(intent, origin, location)
         payload = urlencode({"data": query}).encode()
         request = Request(
             self.endpoint,
@@ -128,7 +128,7 @@ class CompositePlaceProvider(PlaceProvider):
         self._lock = Lock()
 
     def search(self, intent: Intent, location: Location | None) -> list[Place]:
-        key = _build_overpass_query(intent, _search_origin(intent, location))
+        key = _build_overpass_query(intent, _search_origin(intent, location), location)
         with self._lock:
             cached = self._cache.get(key)
             if cached and monotonic() - cached[0] < 300:
@@ -150,9 +150,9 @@ class CompositePlaceProvider(PlaceProvider):
         return []
 
 
-def _build_overpass_query(intent: Intent, origin: Location) -> str:
+def _build_overpass_query(intent: Intent, origin: Location, location: Location | None = None) -> str:
     radius = 6500
-    local_limit = local_distance_limit_km(intent, origin)
+    local_limit = local_distance_limit_km(intent, location)
     if local_limit is not None:
         radius = round(local_limit * 1000)
     elif intent.max_minutes:
@@ -177,6 +177,12 @@ def _search_origin(intent: Intent, location: Location | None) -> Location:
     if intent.area and intent.area in AREA_CENTERS:
         return AREA_CENTERS[intent.area]
     return location or DEFAULT_LAGOS_LOCATION
+
+
+def area_center(intent: Intent) -> Location | None:
+    if intent.area and intent.area in AREA_CENTERS:
+        return AREA_CENTERS[intent.area]
+    return None
 
 
 def _osm_filters(intent: Intent) -> list[tuple[str, str]]:

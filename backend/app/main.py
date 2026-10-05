@@ -10,7 +10,7 @@ from fastapi.responses import RedirectResponse
 
 from app.intelligence import explain_decision
 from app.models import Activity, Intent, Location, RefineRequest, Result, SearchRequest, SearchResponse
-from app.providers import CompositePlaceProvider, NominatimPlaceProvider, OverpassPlaceProvider, SeedPlaceProvider
+from app.providers import CompositePlaceProvider, NominatimPlaceProvider, OverpassPlaceProvider, SeedPlaceProvider, area_center
 from app.query_parser import normalize_intent
 from app.reviews import enrich_with_reviews
 from app.scoring import local_distance_limit_km, score_places
@@ -86,7 +86,8 @@ def _run_search(
     clarification: str | None,
 ) -> SearchResponse:
     places = PLACE_PROVIDER.search(intent, location)
-    results = score_places(places, intent, location, at_hour=_current_lagos_hour())[:6]
+    scoring_origin = area_center(intent) if intent.area else location
+    results = score_places(places, intent, scoring_origin, at_hour=_current_lagos_hour())[:6]
     results = enrich_with_reviews(results)
     response = SearchResponse(
         intent=intent,

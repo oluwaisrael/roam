@@ -61,7 +61,7 @@ function App() {
     setLoading(true); setError(null); setView("explore");
     const refining = options.refine && data;
     // A named area in the prompt always takes precedence over the location picker.
-    const scopedQuery = !namedArea && area !== "Lagos" ? `${nextQuery} around ${area}` : nextQuery;
+    const scopedQuery = !activeLocation && !namedArea && area !== "Lagos" ? `${nextQuery} around ${area}` : nextQuery;
     try {
       const response = await searchApi(refining ? "search/refine" : "search", refining
         ? { search_id: data.search_id, ...(options.change ? { change: options.change } : { query: nextQuery.trim() }) }
